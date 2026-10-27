@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../assets/dingtalk.mp3', import.meta.url));
-const output = new URL('../src/dingtalk-audio.js', import.meta.url);
+const output = new URL('../src/dingtalk-audio.ts', import.meta.url);
 const base64 = source.toString('base64');
 
 writeFileSync(output, `/**
@@ -16,4 +16,4 @@ writeFileSync(output, `/**
  */
 export const DINGTALK_AUDIO = 'data:audio/mpeg;base64,${base64}';
 `);
-console.log(`embedded assets/dingtalk.mp3 (${source.byteLength} bytes) -> src/dingtalk-audio.js`);
+console.log(`embedded assets/dingtalk.mp3 (${source.byteLength} bytes) -> src/dingtalk-audio.ts`);

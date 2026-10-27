@@ -1,5 +1,5 @@
 /**
- * 会话列表快照的读取工具：单行元数据、待回答问题、精灵坐标计算。
+ * 会话列表快照的读取工具：单行元数据、待回答问题、大肥鱼坐标计算。
  */
 import { PET_HEIGHT, PET_WIDTH } from './constants.js';
 
@@ -51,7 +51,7 @@ export function pendingQuestions(snapshot, id) {
 }
 
 /**
- * 把坐标限制在视口内，避免拖动或缩放后精灵跑到屏幕外。
+ * 把坐标限制在视口内，避免拖动或缩放后大肥鱼跑到屏幕外。
  * @param {number} value - 待限制的坐标值，单位：像素。
  * @param {number} max - 该轴允许的最大值，单位：像素。
  * @returns {number} 限制后的坐标值，单位：像素。
@@ -62,10 +62,10 @@ export function clampAxis(value, max) {
 }
 
 /**
- * 计算精灵的左上角坐标：以指针位置减去按下时的偏移，再约束在视口内。
- * @param {{offsetX: number, offsetY: number}} drag - 按下时记录相对精灵左上角的偏移，单位：像素。
+ * 计算大肥鱼的左上角坐标：以指针位置减去按下时的偏移，再约束在视口内。
+ * @param {{offsetX: number, offsetY: number}} drag - 按下时记录相对大肥鱼左上角的偏移，单位：像素。
  * @param {{clientX: number, clientY: number}} point - 当前指针位置，单位：像素。
- * @param {{width: number, height: number}} size - 精灵的实际尺寸，单位：像素。
+ * @param {{width: number, height: number}} size - 大肥鱼的实际尺寸，单位：像素。
  * @returns {{left: number, top: number}} 视口坐标，单位：像素。
  */
 export function spriteTarget(drag, point, size) {
@@ -76,7 +76,7 @@ export function spriteTarget(drag, point, size) {
 }
 
 /**
- * 精灵元素的默认尺寸；元素尚未布局或环境不支持时使用。
+ * 大肥鱼元素的默认尺寸；元素尚未布局或环境不支持时使用。
  * @returns {{width: number, height: number}} 尺寸，单位：像素。
  */
 export function defaultSpriteSize() {

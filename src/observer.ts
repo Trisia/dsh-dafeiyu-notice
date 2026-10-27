@@ -1,5 +1,5 @@
 /**
- * 会话状态观察：把“运行态 → 空闲”判定为任务完成，把新出现的待交互请求判定为等待提示。
+ * 会话状态观察：把“运行态 → 空闲”判定为任务完成，把新出现的待交互请求判定为待处理提醒。
  *
  * 状态取自宿主客户端的 `uiSession.sessionStatus`（宿主在会话事件上实时维护运行态与
  * 待交互请求），会话标题与空白标记取自 `sessions.list`。这两个服务可能晚于插件
@@ -9,32 +9,31 @@
 import { ABORT_TTL, ESC_GAP, RETRY_DELAY, SETTLE_DELAY, STOP_LABEL } from './constants.js';
 
 /**
- * 判断一个待交互请求应归入哪类提示。
+ * 判断一个待交互请求应归入哪类大肥鱼提醒。
  * @param {{kind?: string}} pending - 宿主给出的待交互请求。
- * @returns {'approval'|'question'} 提示类别；审批单独成类，计划审阅与问答归为问答。
+ * @returns {'approval'|'question'} 提醒类型；审批单独成类，计划审阅与问答归为问答。
  */
-function noticeKindOf(pending) {
+function pendingKindOf(pending) {
   return pending?.kind === 'approval' ? 'approval' : 'question';
 }
 
 /**
- * 创建一个会话观察器，接管宿主会话状态并驱动精灵与卡片。
+ * 创建一个会话观察器，接管宿主会话状态并驱动大肥鱼队列。
  * 所有定时器都挂在插件上下文上，插件停用时自动清除。
  * @param {object} options - 依赖注入面。
  * @param {object} options.ctx - 客户端插件上下文。
- * @param {(id: string, sessionLabel: string, title: string) => void} options.onTurnEnd - 会话完成时的回调。
+ * @param {(id: string, sessionLabel: string) => void} options.onTurnEnd - 会话完成时的回调。
  * @param {(sessionId: string, sessionLabel: string) => void} options.onQuestion - 出现待回答请求时的回调。
  * @param {(sessionId: string, sessionLabel: string) => void} options.onApproval - 出现待确认请求时的回调。
- * @param {(key: string) => string} options.t - 文案取值函数。
  * @returns {{dispose: () => void}} 观察器句柄。
  */
-export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval, t }) {
+export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval }) {
   /** 已提示过的待交互请求键，避免重复提示。 */
-  const announced = new Set();
+  const announced = new Set<string>();
   /** 会话 id → 运行结束后待判定的延时器。 */
-  const settleTimers = new Map();
+  const settleTimers = new Map<string, () => void>();
   /** 会话 id → 用户手动中止的记录时间，单位：毫秒。 */
-  const abortedAt = new Map();
+  const abortedAt = new Map<string, number>();
   /** 最近一次读到的会话状态快照，键为会话 id。 */
   let previousStatus;
   /** 最近一次读到的会话列表快照。 */
@@ -74,7 +73,7 @@ export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval, 
     if (status === undefined || status.running !== false) return;
     if (status.pendingInteraction !== undefined && status.pendingInteraction !== null) return;
     if (isBlank(id)) return;
-    onTurnEnd(id, labelOf(id), t('sprite.turnEnd'));
+    onTurnEnd(id, labelOf(id));
   }
 
   /**
@@ -95,7 +94,7 @@ export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval, 
           announced.add(key);
           // 首次加载时已存在的请求不提示，只提示之后新出现的请求。
           if (before !== undefined) {
-            if (noticeKindOf(pending) === 'approval') onApproval(id, labelOf(id));
+            if (pendingKindOf(pending) === 'approval') onApproval(id, labelOf(id));
             else onQuestion(id, labelOf(id));
           }
         }

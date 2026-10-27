@@ -85,8 +85,10 @@ async function playQuestionTone(audio) {
  * 找到页面中挂载的提示音播放元素。
  * @returns {HTMLAudioElement|undefined} 播放元素，未挂载时返回 undefined。
  */
-function findAudioElement() {
-  return typeof document === 'undefined' ? undefined : document.querySelector('audio[data-dshtn-player]');
+function findAudioElement(): HTMLAudioElement | undefined {
+  return typeof document === 'undefined'
+    ? undefined
+    : document.querySelector<HTMLAudioElement>('audio[data-dshtn-player]') ?? undefined;
 }
 
 /**
@@ -108,7 +110,8 @@ export async function ring(isQuestion) {
       // 自动播放被拦截，继续用合成音兜底。
     }
   }
-  const Ctor = window.AudioContext || window.webkitAudioContext;
+  const Ctor = window.AudioContext
+    || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return;
   const audio = new Ctor();
   try {

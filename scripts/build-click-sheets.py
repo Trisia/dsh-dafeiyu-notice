@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """把 dsh-pet 的「点击回应」webm 素材转成内联雪碧图模块。
 
-每段动画取 2 秒（24 帧 @ 12fps，播放 80ms/帧，对应 src/constants.js 的
+每段动画取 2 秒（24 帧 @ 12fps，播放 80ms/帧，对应 src/constants.ts 的
 CLICK_FRAMES / CLICK_FRAME_MS），按角色本体（最大连通区域）
 的 90 分位高度统一取景，缩放到 108x114 后横向拼成一张 WebP，最后写成
-`src/click-sheets.js`，供客户端包直接内联使用。
+`src/click-sheets.ts`，供客户端包直接内联使用。
 
 依赖：ffmpeg（libvpx-vp9 解码透明通道）、Pillow、numpy、scipy。
 
 用法：
-    python3 scripts/build-click-sheets.py --src /path/to/webm [--out src/click-sheets.js]
+    python3 scripts/build-click-sheets.py --src /path/to/webm [--out src/click-sheets.ts]
 
 `--src` 目录需要包含以下文件（文件名与 dsh-pet 仓库一致）：
     点击回应-元气挥手.webm
@@ -163,13 +163,13 @@ def render_module(entries):
 
 
 def main():
-    """解析命令行参数并生成 click-sheets.js。
+    """解析命令行参数并生成 click-sheets.ts。
 
     @returns: 无返回值；失败时抛出 SystemExit。
     """
     parser = argparse.ArgumentParser(description='生成点击回应雪碧图模块')
     parser.add_argument('--src', required=True, help='包含 dsh-pet webm 素材的目录')
-    parser.add_argument('--out', default='src/click-sheets.js', help='输出模块路径')
+    parser.add_argument('--out', default='src/click-sheets.ts', help='输出模块路径')
     args = parser.parse_args()
 
     entries = []

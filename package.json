@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Task-completion and question toasts with a DingTalk-style notification sound",
+  "description": "Task completion, question and approval reminders with a big-fish queue and a DingTalk-style sound",
   "exports": {
     ".": "./index.js",
     "./client": "./lib/client.js",
@@ -39,11 +39,13 @@
     "@deepseek-ai/dsh-client-ui-workspace": "*"
   },
   "scripts": {
-    "build": "node scripts/embed-audio.mjs && tsdown",
+    "build": "tsc -p tsconfig.host.json && node scripts/embed-audio.mjs && tsdown",
+    "typecheck": "tsc --noEmit",
     "watch": "tsdown --watch",
     "test": "node ../test-harness/browser-test.mjs"
   },
   "devDependencies": {
-    "tsdown": "^0.23.2"
+    "tsdown": "^0.23.2",
+    "typescript": "^5.9.3"
   }
 }

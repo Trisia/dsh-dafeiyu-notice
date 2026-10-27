@@ -4,7 +4,7 @@
 const id = '@local/dsh-plugin-task-notify';
 
 export default {
-  entry: { client: 'src/client.js' },
+  entry: { client: 'src/client.ts' },
   outDir: 'lib',
   format: ['cjs'],
   platform: 'browser',

@@ -5,3 +5,4 @@ package-lock.json
 
 # 构建产物由 `pnpm build` 生成
 lib/
+*.tsbuildinfo

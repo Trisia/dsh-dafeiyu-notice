@@ -8,22 +8,13 @@ export const PLUGIN = '@local/dsh-plugin-task-notify';
 /** 字典命名空间。 */
 export const NS = 'taskNotify';
 
-/** 提示卡片的停留时长，单位：毫秒。 */
-export const DEFAULT_DURATION = 8000;
-
-/** 同一类提示的最小间隔，单位：毫秒，用于合并短时间内连续触发的事件。 */
-export const MIN_INTERVAL = 1500;
-
 /** 会话运行结束后延迟判定的时间，单位：毫秒，等宿主先刷新待回答问题投影。 */
 export const SETTLE_DELAY = 900;
 
 /** 等待宿主会话服务就绪时的重试间隔，单位：毫秒。 */
 export const RETRY_DELAY = 1000;
 
-/** 提示卡片最多同时显示的条数。 */
-export const MAX_NOTICES = 4;
-
-/** 精灵单帧停留时长，单位：毫秒。 */
+/** 大肥鱼单帧停留时长，单位：毫秒。 */
 export const SPRITE_FRAME_MS = 80;
 
 /** 雪碧图包含的帧数。 */
@@ -44,7 +35,7 @@ export const CLICK_FADE_MS = 160;
 /** 偏好设置在 localStorage 中的存储键。 */
 export const STORAGE_KEY = 'dsh.taskNotify.settings.v1';
 
-/** 精灵位置在 localStorage 中的存储键。 */
+/** 大肥鱼位置在 localStorage 中的存储键。 */
 export const POS_KEY = 'dsh.taskNotify.spritePos.v1';
 
 /** “停止生成”按钮的无障碍文案特征，用于识别用户手动中止（覆盖中英文与其它语言的 Stop）。 */
@@ -56,8 +47,8 @@ export const ABORT_TTL = 8000;
 /** 连按 Esc 判定为停止的最大间隔，单位：毫秒。 */
 export const ESC_GAP = 1200;
 
-/** 精灵占位宽度，单位：像素，用于把拖动范围限制在视口内。 */
+/** 大肥鱼占位宽度，单位：像素，用于把拖动范围限制在视口内。 */
 export const PET_WIDTH = 108;
 
-/** 精灵占位高度，单位：像素，用于把拖动范围限制在视口内。 */
+/** 大肥鱼占位高度，单位：像素，用于把拖动范围限制在视口内。 */
 export const PET_HEIGHT = 114;

@@ -1,5 +1,5 @@
 /**
- * 精灵雪碧图：20 帧“鲸鱼尾巴拍地”横向拼接，内联为 data URL 以免依赖资源路由。
+ * 大肥鱼雪碧图：20 帧“鲸鱼尾巴拍地”横向拼接，内联为 data URL 以免依赖资源路由。
  * 单帧尺寸 {@link PET_WIDTH} × {@link PET_HEIGHT}。
  * @type {string}
  */

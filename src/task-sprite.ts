@@ -1,5 +1,5 @@
 /**
- * 右下角小精灵：任务完成时出现，逐帧播放雪碧图动画，可拖动。
+ * 右下角大肥鱼：任务完成、等待回答或等待确认时出现，逐帧播放雪碧图动画，可拖动。
  * 点击一次打开队首会话并播放一段随机的点击回应动画；队列点空后自行收起。
  */
 import React from 'react';
@@ -11,8 +11,8 @@ import { readSpritePos, writeSpritePos } from './storage.js';
 const h = React.createElement;
 
 /**
- * 读取精灵元素的实际尺寸；尚未布局或环境不支持时退回默认尺寸。
- * @param {HTMLElement} element - 精灵按钮元素。
+ * 读取大肥鱼元素的实际尺寸；尚未布局或环境不支持时退回默认尺寸。
+ * @param {HTMLElement} element - 大肥鱼按钮元素。
  * @returns {{width: number, height: number}} 尺寸，单位：像素。
  */
 function elementSize(element) {
@@ -24,13 +24,13 @@ function elementSize(element) {
 }
 
 /**
- * 右下角小精灵：任务完成时出现，逐帧播放动画，可拖到任意位置。
+ * 右下角大肥鱼：任务完成、等待回答或等待确认时出现，逐帧播放动画，可拖到任意位置。
  * @param {object} props - 槽位注入的渲染属性与插件注入面。
  * @param {(key: string, params?: object) => string} props.t - 文案取值函数。
- * @param {object} props.useTaskNotifySprite - 精灵状态仓库的读取钩子。
+ * @param {object} props.useTaskNotifySprite - 大肥鱼状态仓库的读取钩子。
  * @param {() => void} props.activateNext - 打开队首会话并播放点击动画。
- * @param {() => void} props.dismiss - 清空队列并收起精灵。
- * @returns {object|null} 精灵元素；不显示时为 null。
+ * @param {() => void} props.dismiss - 清空队列并收起大肥鱼。
+ * @returns {object|null} 大肥鱼元素；不显示时为 null。
  */
 export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss }) {
   const sprite = useTaskNotifySprite((value) => value);
@@ -60,7 +60,7 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss }) {
     return () => window.clearInterval(timer);
   }, [playing, clicking]);
 
-  // 视口尺寸变化后重新收拢坐标，防止精灵停在屏幕外。
+  // 视口尺寸变化后重新收拢坐标，防止大肥鱼停在屏幕外。
   React.useEffect(() => {
     if (!playing) return undefined;
     const keepInside = () => {
@@ -79,7 +79,7 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss }) {
   if (!playing) return null;
 
   /**
-   * 开始拖动：记录指针相对精灵左上角的偏移。
+   * 开始拖动：记录指针相对大肥鱼左上角的偏移。
    * @param {PointerEvent} event - 指针按下事件。
    */
   const onPointerDown = (event) => {
@@ -146,7 +146,7 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss }) {
   };
 
   /**
-   * 键盘激活：Enter / 空格等价于点击精灵。
+   * 键盘激活：Enter / 空格等价于点击大肥鱼。
    * @param {KeyboardEvent} event - 键盘事件。
    */
   const onKeyDown = (event) => {
@@ -163,6 +163,7 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss }) {
       className: 'dshtn-pet',
       'data-sprite': 'jingyu-weiba',
       'data-phase': clicking ? 'click' : 'idle',
+      'data-kind': sprite.kind,
       'data-dragging': dragging ? 'true' : 'false',
       'data-placed': pos ? 'true' : 'false',
       style: pos ? { left: `${pos.left}px`, top: `${pos.top}px` } : undefined,

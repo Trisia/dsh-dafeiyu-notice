@@ -1,10 +1,9 @@
 /**
- * 浏览器半边：注册精灵浮层、提示卡片与设置行，并把会话列表变化翻译成提示。
+ * 浏览器半边：注册大肥鱼浮层与设置行，并把会话状态变化翻译成提醒。
  */
-import { CLICK_DURATION, CLICK_FADE_MS, DEFAULT_DURATION, MAX_NOTICES, MIN_INTERVAL, NS, PLUGIN } from './constants.js';
+import { CLICK_DURATION, CLICK_FADE_MS, NS, PLUGIN } from './constants.js';
 import { CLICK_SHEETS } from './click-sheets.js';
 import { EN, ZH } from './locale.js';
-import { NoticeStack } from './notice-stack.js';
 import { NotifySettingsRow } from './notify-settings-row.js';
 import { createSessionObserver } from './observer.js';
 import { ring, resolveSoundUrl } from './sound.js';
@@ -74,12 +73,13 @@ export function apply(ctx) {
     for (const name of unlockEvents) window.removeEventListener(name, unlock, { capture: true });
   }, 'task-notify: audio unlock');
 
-  // ── 小精灵状态 ──────────────────────────────────────────────────────
-  // 精灵是单例：多个会话完成时排成 FIFO 队列，每点一次打开队首会话并消除它；
-  // 队列非空时保持显示，点空后播放完点击动画再收起。
+  // ── 大肥鱼状态 ──────────────────────────────────────────────────────
+  // 大肥鱼是单例：任务完成、等待回答、等待确认都进入同一个 FIFO 队列；
+  // 每点一次打开队首会话并消除它，队列点空后播放完点击动画再收起。
   const spriteStore = createStore({
     visible: false,
     title: '',
+    kind: 'turnEnd',
     sessionLabel: '',
     queue: [],
     phase: 'idle',
@@ -89,6 +89,22 @@ export function apply(ctx) {
   });
   /** 点击动画结束后切换待机或收起的延时器。 */
   let clickTimer;
+
+  /** 不同提醒类型对应的气泡标题字典键。 */
+  const TITLE_KEYS = {
+    turnEnd: 'sprite.turnEnd',
+    question: 'sprite.question',
+    approval: 'sprite.approval',
+  };
+
+  /**
+   * 取某类提醒的气泡标题。
+   * @param {'turnEnd'|'question'|'approval'} kind - 提醒类型。
+   * @returns {string} 已翻译的气泡标题。
+   */
+  function titleOf(kind) {
+    return t(TITLE_KEYS[kind] ?? TITLE_KEYS.turnEnd);
+  }
 
   /**
    * 选取下一段点击回应动画，避免与上一次相同。
@@ -103,31 +119,33 @@ export function apply(ctx) {
   }
 
   /**
-   * 显示完成精灵；已经在显示时只更新队列，不重复播放提示音。
-   * 同一会话重复完成时合并为一条，并刷新它的标题。
-   * @param {string} sessionId - 触发提示的会话。
+   * 把一条提醒加入大肥鱼队列；已经在显示时只更新队列，不重复播放提示音。
+   * 同一会话重复触发时合并为一条，并刷新类型与标题。
+   * @param {string} sessionId - 触发提醒的会话。
    * @param {string} sessionLabel - 会话标题。
-   * @param {string} title - 气泡文案。
+   * @param {'turnEnd'|'question'|'approval'} kind - 提醒类型。
    * @returns {boolean} 本次调用是否播放了提示音。
    */
-  function showSprite(sessionId, sessionLabel, title) {
+  function enqueueSprite(sessionId, sessionLabel, kind) {
     const current = settingsStore.getSnapshot();
     if (!current.enabled) return false;
     const previous = spriteStore.getSnapshot();
-    const queued = previous.queue.some((item) => item.sessionId === sessionId);
-    const queue = queued
-      ? previous.queue.map((item) => (item.sessionId === sessionId ? { ...item, sessionLabel } : item))
-      : [...previous.queue, { sessionId, sessionLabel }];
+    const index = previous.queue.findIndex((item) => item.sessionId === sessionId);
+    const queue = index >= 0
+      ? previous.queue.map((item, i) => (i === index ? { ...item, sessionLabel, kind } : item))
+      : [...previous.queue, { sessionId, sessionLabel, kind }];
+    const head = queue[0];
     spriteStore.set({
       ...previous,
       visible: true,
-      title,
+      title: titleOf(head.kind),
+      kind: head.kind,
       queue,
-      sessionLabel: queue[0].sessionLabel,
+      sessionLabel: head.sessionLabel,
     });
     // 已经在显示时视为同一次提醒：不再重复响铃。
     if (previous.visible) return false;
-    if (current.sound) ring(false);
+    if (current.sound) ring(kind !== 'turnEnd');
     return true;
   }
 
@@ -139,7 +157,7 @@ export function apply(ctx) {
   }
 
   /**
-   * 点击精灵：打开队首会话、消除该条，并播放一段随机的点击回应动画。
+   * 点击大肥鱼：打开队首会话、消除该条，并播放一段随机的点击回应动画。
    * @returns {void}
    */
   function activateNext() {
@@ -149,15 +167,18 @@ export function apply(ctx) {
       return;
     }
     const [next, ...rest] = current.queue;
+    const head = rest[0];
     clearClickTimer();
     spriteStore.set({
       ...current,
       visible: true,
+      title: head ? titleOf(head.kind) : current.title,
+      kind: head ? head.kind : current.kind,
       queue: rest,
       phase: 'click',
       clickIndex: pickClickIndex(current.clickIndex),
       clickSeq: current.clickSeq + 1,
-      sessionLabel: rest.length > 0 ? rest[0].sessionLabel : next.sessionLabel,
+      sessionLabel: head ? head.sessionLabel : next.sessionLabel,
     });
     openSession(next.sessionId);
 
@@ -178,7 +199,7 @@ export function apply(ctx) {
     }, CLICK_DURATION);
   }
 
-  /** 清空队列并隐藏完成精灵。 */
+  /** 清空队列并隐藏大肥鱼。 */
   function hideSprite() {
     clearClickTimer();
     const current = spriteStore.getSnapshot();
@@ -187,53 +208,11 @@ export function apply(ctx) {
       ...current,
       visible: false,
       title: '',
+      kind: 'turnEnd',
       sessionLabel: '',
       queue: [],
       phase: 'idle',
     });
-  }
-
-  // ── 提示卡片状态 ────────────────────────────────────────────────────
-  const noticesStore = createStore([]);
-  let noticeSeq = 0;
-  const lastFireAt = {};
-
-  /**
-   * 移除指定提示卡片。
-   * @param {number} id - 提示卡片编号。
-   */
-  function dismissNotice(id) {
-    const current = noticesStore.getSnapshot();
-    if (!current.some((item) => item.id === id)) return;
-    noticesStore.set(current.filter((item) => item.id !== id));
-  }
-
-  /**
-   * 显示一张提示卡片并播放提示音，停留结束后自动移除。
-   * @param {'turnEnd'|'question'|'approval'} kind - 提示类别。
-   * @param {string} sessionId - 触发提示的会话。
-   * @param {string} sessionLabel - 会话标题。
-   */
-  function showNotice(kind, sessionId, sessionLabel) {
-    const current = settingsStore.getSnapshot();
-    if (!current.enabled) return;
-    const now = Date.now();
-    if (now - (lastFireAt[kind] ?? 0) < MIN_INTERVAL) return;
-    lastFireAt[kind] = now;
-    noticeSeq += 1;
-    const id = noticeSeq;
-    noticesStore.set([...noticesStore.getSnapshot(), {
-      id,
-      kind,
-      sessionId,
-      sessionLabel,
-      title: t(`notice.${kind}.title`),
-      body: t(`notice.${kind}.body`),
-      openLabel: t('notice.open'),
-      closeLabel: t('notice.close'),
-    }].slice(-MAX_NOTICES));
-    if (current.sound) ring(kind !== 'turnEnd');
-    ctx.timeout(() => dismissNotice(id), DEFAULT_DURATION);
   }
 
   /**
@@ -245,17 +224,16 @@ export function apply(ctx) {
     if (workspace !== undefined) workspace.openSession(sessionId);
   }
 
-  // ── 会话状态观察：任务完成、等待回答与等待确认 ──────────────────────
+  // ── 会话状态观察：任务完成、等待回答与等待确认都进入同一队列 ────────
   const observer = createSessionObserver({
     ctx,
-    t,
-    onTurnEnd: showSprite,
-    onQuestion: (sessionId, sessionLabel) => showNotice('question', sessionId, sessionLabel),
-    onApproval: (sessionId, sessionLabel) => showNotice('approval', sessionId, sessionLabel),
+    onTurnEnd: (sessionId, sessionLabel) => enqueueSprite(sessionId, sessionLabel, 'turnEnd'),
+    onQuestion: (sessionId, sessionLabel) => enqueueSprite(sessionId, sessionLabel, 'question'),
+    onApproval: (sessionId, sessionLabel) => enqueueSprite(sessionId, sessionLabel, 'approval'),
   });
   ctx.effect(() => () => observer.dispose(), 'task-notify: session observer');
 
-  // ── 浮层：右下角小精灵 ──────────────────────────────────────────────
+  // ── 浮层：右下角大肥鱼 ──────────────────────────────────────────────
   ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register({
       name: 'shell.overlay',
@@ -268,21 +246,6 @@ export function apply(ctx) {
         dismiss: hideSprite,
       }),
     }, TaskSprite),
-  );
-
-  // ── 浮层：等待回答/确认提示卡片 ──────────────────────────────────────
-  ctx.slots.inject('shell.overlay', () =>
-    ctx.slots.register({
-      name: 'shell.overlay',
-      id: 'task-notify-cards',
-      order: 89,
-      locale: NS,
-      inject: () => ({
-        hooks: { taskNotifyNotices: noticesStore },
-        openSession,
-        dismiss: dismissNotice,
-      }),
-    }, NoticeStack),
   );
 
   // ── 常规设置行 ──────────────────────────────────────────────────────

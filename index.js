@@ -5,6 +5,5 @@
  * Client already keeps in memory; the Host row only makes the bundle selectable
  * and carries the config schema.
  */
-
 /** No host-side behaviour. */
-export function apply() {}
+export function apply() { }

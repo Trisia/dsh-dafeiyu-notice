@@ -1,5 +1,5 @@
 /**
- * 偏好设置与精灵位置的持久化，都存放在页面 localStorage。
+ * 偏好设置与大肥鱼位置的持久化，都存放在页面 localStorage。
  */
 import { POS_KEY, STORAGE_KEY } from './constants.js';
 
@@ -35,7 +35,7 @@ export function writeSettings(settings) {
 }
 
 /**
- * 读取已保存的精灵位置。
+ * 读取已保存的大肥鱼位置。
  * @returns {{left: number, top: number}|undefined} 视口坐标；从未拖动过时为 undefined。
  */
 export function readSpritePos() {
@@ -51,7 +51,7 @@ export function readSpritePos() {
 }
 
 /**
- * 保存精灵位置，供下次打开页面时恢复。
+ * 保存大肥鱼位置，供下次打开页面时恢复。
  * @param {{left: number, top: number}} pos - 视口坐标。
  */
 export function writeSpritePos(pos) {
