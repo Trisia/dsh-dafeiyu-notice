@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Task Notify & DingTalk Sound",
+    "description": "Shows a floating notice and plays the DingTalk sound whenever any session finishes a task or asks a multiple-choice question."
+  }
+}

@@ -1,0 +1,8 @@
+- insert:
+    - id: task-notify
+      name: '@local/dsh-plugin-task-notify'
+      config:
+        notifyOnTurnEnd: true
+        notifyOnQuestion: true
+        notifyOnApproval: true
+        onlyWhenHidden: false
