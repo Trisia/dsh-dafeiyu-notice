@@ -1,156 +1,210 @@
 /**
- * 会话列表观察：把“运行态 → 空闲”判定为任务完成，把新增待回答请求判定为等待提示。
+ * 会话状态观察：把“运行态 → 空闲”判定为任务完成，把新出现的待交互请求判定为等待提示。
+ *
+ * 状态取自宿主客户端的 `uiSession.sessionStatus`（宿主在会话事件上实时维护运行态与
+ * 待交互请求），会话标题与空白标记取自 `sessions.list`。这两个服务可能晚于插件
+ * 挂载才注册，因此统一用 `ctx.inject` 等待就绪后再接管；服务缺失时定时重试，
+ * 不能在挂载瞬间读一次就放弃监听。
  */
 import { ABORT_TTL, ESC_GAP, RETRY_DELAY, SETTLE_DELAY, STOP_LABEL } from './constants.js';
-import { activeQuestionCount, metaOf, pendingQuestions } from './session-view.js';
 
 /**
- * 创建一个会话观察器，接管宿主会话列表并驱动精灵与卡片。
- *
- * 列表优先取自上下文可达的 `sessions` 服务；该服务尚未就绪时，
- * 由浮层组件在渲染期调用 {@link observe.useSessionsList} 取得。
+ * 判断一个待交互请求应归入哪类提示。
+ * @param {{kind?: string}} pending - 宿主给出的待交互请求。
+ * @returns {'approval'|'question'} 提示类别；审批单独成类，计划审阅与问答归为问答。
+ */
+function noticeKindOf(pending) {
+  return pending?.kind === 'approval' ? 'approval' : 'question';
+}
+
+/**
+ * 创建一个会话观察器，接管宿主会话状态并驱动精灵与卡片。
  * 所有定时器都挂在插件上下文上，插件停用时自动清除。
  * @param {object} options - 依赖注入面。
  * @param {object} options.ctx - 客户端插件上下文。
  * @param {(id: string, sessionLabel: string, title: string) => void} options.onTurnEnd - 会话完成时的回调。
  * @param {(sessionId: string, sessionLabel: string) => void} options.onQuestion - 出现待回答请求时的回调。
+ * @param {(sessionId: string, sessionLabel: string) => void} options.onApproval - 出现待确认请求时的回调。
  * @param {(key: string) => string} options.t - 文案取值函数。
- * @returns {{useSessionsList: (scope: object) => undefined, dispose: () => void}} 观察器句柄。
+ * @returns {{dispose: () => void}} 观察器句柄。
  */
-export function createSessionObserver({ ctx, onTurnEnd, onQuestion, t }) {
-  /** 已提示过的“等待回答”请求键，避免重复响铃。 */
-  const announcedQuestions = new Set();
+export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval, t }) {
+  /** 已提示过的待交互请求键，避免重复提示。 */
+  const announced = new Set();
   /** 会话 id → 运行结束后待判定的延时器。 */
   const settleTimers = new Map();
   /** 会话 id → 用户手动中止的记录时间，单位：毫秒。 */
   const abortedAt = new Map();
-  /** 已接管的列表及其上一份快照。 */
-  let list = undefined;
-  let previous = undefined;
-  /** 列表是否已经接管（成功或经上下文注入），避免重复尝试。 */
-  let settled = false;
-  /** 上一次按下 Esc 的时间，单位：毫秒。 */
-  let lastEscapeAt = 0;
+  /** 最近一次读到的会话状态快照，键为会话 id。 */
+  let previousStatus;
+  /** 最近一次读到的会话列表快照。 */
+  let listSnapshot;
+  /** 状态快照源；服务未就绪时为空。 */
+  let statusSource;
+
+  /**
+   * 读取会话标题；列表尚未就绪或标题为空时退回会话 id。
+   * @param {string} id - 会话 id。
+   * @returns {string} 用于提示文案的会话标题。
+   */
+  function labelOf(id) {
+    const row = listSnapshot?.byId?.[id];
+    const label = typeof row?.displayTitle === 'string' && row.displayTitle !== ''
+      ? row.displayTitle
+      : row?.title;
+    return typeof label === 'string' && label !== '' ? label : String(id);
+  }
+
+  /**
+   * 判断会话是否仍是没有内容的新会话；这类会话结束时不必提醒。
+   * @param {string} id - 会话 id。
+   * @returns {boolean} 是否为空白会话。
+   */
+  function isBlank(id) {
+    return listSnapshot?.byId?.[id]?.blank === true;
+  }
 
   /**
    * 会话停止运行后判定是否为“任务完成”并提示。
    * @param {string} id - 会话 id。
    */
   function settleTurn(id) {
-    const snapshot = list.getSnapshot();
-    const meta = metaOf(snapshot, id);
-    if (!meta || meta.running) return;
-    if (meta.blank) return;
-    // 仍有待回答的问答时由等待类提示负责。
-    if (activeQuestionCount(snapshot, id) > 0) return;
-    onTurnEnd(id, meta.label, t('sprite.turnEnd'));
+    const status = statusSource?.getSnapshot?.().get(id);
+    // 等待期间可能又开始了新一轮任务，或多出待交互请求：此时不按完成提示。
+    if (status === undefined || status.running !== false) return;
+    if (status.pendingInteraction !== undefined && status.pendingInteraction !== null) return;
+    if (isBlank(id)) return;
+    onTurnEnd(id, labelOf(id), t('sprite.turnEnd'));
   }
 
   /**
-   * 处理一次列表快照变化：探测运行态转换与新增的待回答请求。
-   * @param {object} current - 新的会话列表快照。
-   * @param {object} before - 上一份会话列表快照；首次加载时传入 undefined。
+   * 处理一次状态快照变化：探测运行态转换与新增的待交互请求。
+   * @param {Map<string, {running?: boolean, pendingInteraction?: object}>|undefined} before - 上一份状态快照；首次加载时为 undefined。
+   * @param {Map<string, {running?: boolean, pendingInteraction?: object}>} current - 新的状态快照。
    */
-  function inspectList(current, before) {
-    for (const id of Object.keys(current?.byId ?? {})) {
-      const wasRunning = before?.byId?.[id]?.running === true;
-      const isRunning = current.byId[id]?.running === true;
+  function inspect(before, current) {
+    for (const [id, status] of current) {
+      const previous = before?.get(id);
+      const pending = status?.pendingInteraction ?? undefined;
+      const previousPending = previous?.pendingInteraction ?? undefined;
+
+      // 新增的待交互请求：只在它出现的那一刻提示一次。
+      if (pending !== undefined && pending !== previousPending) {
+        const key = `${id}:${pending.key}`;
+        if (!announced.has(key)) {
+          announced.add(key);
+          // 首次加载时已存在的请求不提示，只提示之后新出现的请求。
+          if (before !== undefined) {
+            if (noticeKindOf(pending) === 'approval') onApproval(id, labelOf(id));
+            else onQuestion(id, labelOf(id));
+          }
+        }
+      }
+
+      const wasRunning = previous?.running === true;
+      const isRunning = status?.running === true;
 
       if (!wasRunning && isRunning) {
         // 新一轮任务开始：取消上一次尚未判定的结束检查并清空问答去重记录。
         settleTimers.get(id)?.();
         settleTimers.delete(id);
         abortedAt.delete(id);
-        for (const key of [...announcedQuestions]) {
-          if (key.startsWith(`${id}:`)) announcedQuestions.delete(key);
+        for (const key of [...announced]) {
+          if (key.startsWith(`${id}:`)) announced.delete(key);
         }
       } else if (wasRunning && !isRunning) {
         settleTimers.get(id)?.();
         settleTimers.delete(id);
-        const abortedTime = abortedAt.get(id);
-        abortedAt.delete(id);
-        // 用户手动停止的会话不算任务完成，直接跳过。
-        if (abortedTime !== undefined && Date.now() - abortedTime < ABORT_TTL) continue;
-        // 运行态 → 空闲：稍等宿主刷新投影后判定是否完成。
+        // 运行态 → 空闲：稍等宿主刷新投影后再判定是否完成。
         settleTimers.set(id, ctx.timeout(() => {
           settleTimers.delete(id);
+          const abortedTime = abortedAt.get(id);
+          abortedAt.delete(id);
+          // 用户手动停止的会话不算任务完成，直接跳过。
+          if (abortedTime !== undefined && Date.now() - abortedTime < ABORT_TTL) return;
           settleTurn(id);
         }, SETTLE_DELAY));
       }
-
-      // 新增的待回答请求：弹出“等待回答”提示。
-      for (const question of pendingQuestions(current, id)) {
-        const key = `${id}:${question.key}`;
-        if (announcedQuestions.has(key)) continue;
-        announcedQuestions.add(key);
-        // 首次加载时已存在的请求不提示，只提示之后新出现的请求。
-        if (before === undefined) continue;
-        const meta = metaOf(current, id);
-        if (!meta) continue;
-        onQuestion(id, meta.label);
-      }
     }
   }
 
   /**
-   * 接管一个会话列表快照源，开始观察其变化。
-   * @param {object} source - 提供 getSnapshot / subscribe 的会话列表。
-   * @returns {() => void} 解除订阅的清理函数。
+   * 接管状态与列表两个快照源，开始观察其变化。
+   * @param {object} scope - 已就绪的服务作用域（或插件上下文本身）。
+   * @returns {void}
    */
-  function attachList(source) {
-    settled = true;
-    list = source;
-    previous = source.getSnapshot();
-    inspectList(previous, undefined);
-    return source.subscribe(() => {
-      const current = list.getSnapshot();
-      const before = previous;
-      previous = current;
-      inspectList(current, before);
+  function attach(scope) {
+    const nextStatusSource = scope?.uiSession?.sessionStatus;
+    if (typeof nextStatusSource?.getSnapshot !== 'function' || typeof nextStatusSource.subscribe !== 'function') return;
+    statusSource = nextStatusSource;
+    const listSource = scope?.sessions?.list;
+    listSnapshot = listSource?.getSnapshot?.();
+    previousStatus = statusSource.getSnapshot();
+
+    const offStatus = statusSource.subscribe(() => {
+      const next = statusSource.getSnapshot();
+      const before = previousStatus;
+      previousStatus = next;
+      listSnapshot = listSource?.getSnapshot?.() ?? listSnapshot;
+      inspect(before, next);
     });
+    const offList = typeof listSource?.subscribe === 'function'
+      ? listSource.subscribe(() => {
+        listSnapshot = listSource.getSnapshot();
+      })
+      : () => {};
+
+    scope.effect(() => () => {
+      offStatus();
+      offList();
+      settleTimers.clear();
+      announced.clear();
+      abortedAt.clear();
+    }, 'task-notify: session watcher');
   }
 
   /**
-   * 从宿主装饰上下文取得会话列表；尚未就绪时定时重试，直到拿到或插件停用。
-   *
-   * 动态客户端包可能在页面的会话服务就绪之前加载并被渲染，因此这里不假定
-   * 某个服务此刻已经存在。返回值不参与渲染，仅供浮层组件在渲染期触发取数。
-   * @param {object} scope - 槽位注册回调收到的装饰上下文。
-   * @returns {undefined} 始终返回 undefined。
+   * 从上下文逐次重试读取服务；`ctx.inject` 不可用时的兜底路径。
+   * @returns {void}
    */
-  function useSessionsList(scope) {
-    if (list !== undefined || settled) return undefined;
-    const hook = scope?.useSessionsList;
-    const source = typeof hook === 'function' ? hook() : undefined;
-    if (source !== undefined && typeof source.getSnapshot === 'function'
-      && typeof source.subscribe === 'function') {
-      settled = true;
-      // 渲染期不产生副作用：等本次提交结束后再订阅。
-      Promise.resolve().then(() => ctx.effect(
-        () => attachList(source),
-        'task-notify: session list watcher',
-      ));
-      return undefined;
+  function attachByPolling() {
+    const sessions = typeof ctx.get === 'function' ? ctx.get('sessions') : undefined;
+    const uiSession = typeof ctx.get === 'function' ? ctx.get('uiSession') : undefined;
+    if (sessions !== undefined && uiSession !== undefined) {
+      attach({ sessions, uiSession, effect: ctx.effect.bind(ctx) });
+      return;
     }
-    ctx.timeout(() => useSessionsList(scope), RETRY_DELAY);
-    return undefined;
+    ctx.timeout(attachByPolling, RETRY_DELAY);
+  }
+
+  // 首选 ctx.inject：服务注册、重载时都会重新回调，天然处理晚就绪的情况。
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['sessions', 'uiSession'], (scope) => attach(scope));
+  } else {
+    attachByPolling();
   }
 
   /**
-   * 记下一次“用户正在停止生成”：取当前最近更新的运行中会话。
+   * 取最近更新的运行中会话：用于把“用户正在停止生成”记到正确的会话上。
+   * @returns {string|undefined} 会话 id；没有运行中的会话时为空。
+   */
+  function latestRunningId() {
+    if (previousStatus === undefined) return undefined;
+    let latest;
+    for (const [id, status] of previousStatus) {
+      if (status?.running !== true) continue;
+      const stamp = listSnapshot?.byId?.[id]?.updatedAt ?? 0;
+      if (latest === undefined || stamp >= latest.stamp) latest = { id, stamp };
+    }
+    return latest?.id;
+  }
+
+  /**
+   * 记下一次“用户正在停止生成”。
    */
   function markUserAbort() {
-    const snapshot = list?.getSnapshot();
-    if (!snapshot) return;
-    let latest;
-    for (const id of Object.keys(snapshot.byId ?? {})) {
-      const row = snapshot.byId[id];
-      if (row?.running !== true) continue;
-      if (!latest || (row.updatedAt ?? 0) >= latest.updatedAt) {
-        latest = { id, updatedAt: row.updatedAt ?? 0 };
-      }
-    }
-    if (latest) abortedAt.set(latest.id, Date.now());
+    const id = latestRunningId();
+    if (id !== undefined) abortedAt.set(id, Date.now());
   }
 
   /**
@@ -165,6 +219,9 @@ export function createSessionObserver({ ctx, onTurnEnd, onQuestion, t }) {
     if (STOP_LABEL.test(label)) markUserAbort();
   }
 
+  /** 上一次按下 Esc 的时间，单位：毫秒。 */
+  let lastEscapeAt = 0;
+
   /**
    * 连按两次 Esc 是停止生成的快捷键，这里用同样的节奏记录中止。
    * @param {KeyboardEvent} event - 键盘事件。
@@ -175,13 +232,6 @@ export function createSessionObserver({ ctx, onTurnEnd, onQuestion, t }) {
     const repeated = now - lastEscapeAt < ESC_GAP;
     lastEscapeAt = now;
     if (repeated) markUserAbort();
-  }
-
-  // 首选上下文可达的会话服务；未就绪时由浮层的 useSessionsList 钩子接管。
-  const attached = ctx.get('sessions')?.list;
-  if (attached !== undefined && typeof attached.getSnapshot === 'function'
-    && typeof attached.subscribe === 'function') {
-    ctx.effect(() => attachList(attached), 'task-notify: session list watcher');
   }
 
   window.addEventListener('click', onDocumentClick, true);
@@ -198,9 +248,9 @@ export function createSessionObserver({ ctx, onTurnEnd, onQuestion, t }) {
    */
   function dispose() {
     settleTimers.clear();
-    announcedQuestions.clear();
+    announced.clear();
     abortedAt.clear();
   }
 
-  return { useSessionsList, dispose };
+  return { dispose };
 }

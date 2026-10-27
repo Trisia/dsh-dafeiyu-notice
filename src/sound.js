@@ -1,23 +1,17 @@
 /**
  * 提示音：优先播放插件自带的钉钉音频，被自动播放策略拦截时退回 WebAudio 合成音。
  */
+import { DINGTALK_AUDIO } from './dingtalk-audio.js';
 
 /**
- * 解析插件自带提示音文件的绝对地址。
+ * 取插件自带提示音的地址。
  *
- * 客户端包经宿主路由以 `/plugins/<id>/client.js` 提供，资源与它同目录；
- * 其它加载场景下按页面基准地址解析。两者都无法解析时返回空串，
- * 由 {@link ring} 退回合成音。
- * @returns {string} 音频文件地址，无法解析时为空串。
+ * 音频以 data URL 内嵌在客户端包里：宿主的插件路由只提供 `client.js`，
+ * 包内资源目录不对外，因此不能按相对路径加载。
+ * @returns {string} 可直接赋给 audio.src 的地址。
  */
 export function resolveSoundUrl() {
-  try {
-    const base = document.baseURI;
-    const dir = base.includes('/plugins/') ? base.slice(0, base.lastIndexOf('/') + 1) : base;
-    return new URL('assets/dingtalk.mp3', dir).toString();
-  } catch (error) {
-    return '';
-  }
+  return DINGTALK_AUDIO;
 }
 
 /**

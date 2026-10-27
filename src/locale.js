@@ -17,6 +17,8 @@ export const EN = {
   'notice.approval.title': 'Waiting for approval',
   'notice.approval.body': 'A session needs you to confirm a tool call.',
   'sprite.turnEnd': 'Task done!',
+  'sprite.more': '{count} more',
+  'sprite.dismiss': 'Clear notifications',
   'notice.open': 'Open session',
   'notice.close': 'Dismiss notice',
 };
@@ -36,6 +38,8 @@ export const ZH = {
   'notice.approval.title': '等待你的确认',
   'notice.approval.body': '有会话需要你确认一次工具调用。',
   'sprite.turnEnd': '任务完成啦！',
+  'sprite.more': '还有 {count} 个',
+  'sprite.dismiss': '清空提醒',
   'notice.open': '打开会话',
   'notice.close': '关闭提示',
 };

@@ -21,8 +21,8 @@ function iconOf(kind) {
  * @param {object} props - 槽位注入的渲染属性与插件注入面。
  * @returns {object|null} 卡片堆栈元素；没有提示时为 null。
  */
-export function NoticeStack({ useNotifications, openSession, dismiss }) {
-  const notices = useNotifications((value) => value);
+export function NoticeStack({ useTaskNotifyNotices, openSession, dismiss }) {
+  const notices = useTaskNotifyNotices((value) => value);
   if (!Array.isArray(notices) || notices.length === 0) return null;
   return h(
     'div',

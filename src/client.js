@@ -1,7 +1,8 @@
 /**
  * 浏览器半边：注册精灵浮层、提示卡片与设置行，并把会话列表变化翻译成提示。
  */
-import { DEFAULT_DURATION, MAX_NOTICES, MIN_INTERVAL, NS, PLUGIN } from './constants.js';
+import { CLICK_DURATION, CLICK_FADE_MS, DEFAULT_DURATION, MAX_NOTICES, MIN_INTERVAL, NS, PLUGIN } from './constants.js';
+import { CLICK_SHEETS } from './click-sheets.js';
 import { EN, ZH } from './locale.js';
 import { NoticeStack } from './notice-stack.js';
 import { NotifySettingsRow } from './notify-settings-row.js';
@@ -74,13 +75,36 @@ export function apply(ctx) {
   }, 'task-notify: audio unlock');
 
   // ── 小精灵状态 ──────────────────────────────────────────────────────
-  // 精灵是单例：多个会话同时完成时只出现一个、只响一次，后到的会话
-  // 只更新气泡上的会话名并把动画从头播放。
-  const spriteStore = createStore({ visible: false, title: '', sessionLabel: '', seq: 0 });
-  let spriteSeq = 0;
+  // 精灵是单例：多个会话完成时排成 FIFO 队列，每点一次打开队首会话并消除它；
+  // 队列非空时保持显示，点空后播放完点击动画再收起。
+  const spriteStore = createStore({
+    visible: false,
+    title: '',
+    sessionLabel: '',
+    queue: [],
+    phase: 'idle',
+    // -1 表示还没有播放过点击回应；首次点击可以在 5 段动画里任选。
+    clickIndex: -1,
+    clickSeq: 0,
+  });
+  /** 点击动画结束后切换待机或收起的延时器。 */
+  let clickTimer;
 
   /**
-   * 显示完成精灵；已经在显示时只刷新文字与动画，不重复播放提示音。
+   * 选取下一段点击回应动画，避免与上一次相同。
+   * @param {number} previous - 上一次使用的动画下标。
+   * @returns {number} 新的动画下标。
+   */
+  function pickClickIndex(previous) {
+    if (CLICK_SHEETS.length <= 1) return 0;
+    let next = previous;
+    while (next === previous) next = Math.floor(Math.random() * CLICK_SHEETS.length);
+    return next;
+  }
+
+  /**
+   * 显示完成精灵；已经在显示时只更新队列，不重复播放提示音。
+   * 同一会话重复完成时合并为一条，并刷新它的标题。
    * @param {string} sessionId - 触发提示的会话。
    * @param {string} sessionLabel - 会话标题。
    * @param {string} title - 气泡文案。
@@ -90,13 +114,16 @@ export function apply(ctx) {
     const current = settingsStore.getSnapshot();
     if (!current.enabled) return false;
     const previous = spriteStore.getSnapshot();
-    spriteSeq += 1;
+    const queued = previous.queue.some((item) => item.sessionId === sessionId);
+    const queue = queued
+      ? previous.queue.map((item) => (item.sessionId === sessionId ? { ...item, sessionLabel } : item))
+      : [...previous.queue, { sessionId, sessionLabel }];
     spriteStore.set({
+      ...previous,
       visible: true,
       title,
-      sessionLabel,
-      sessionId,
-      seq: spriteSeq,
+      queue,
+      sessionLabel: queue[0].sessionLabel,
     });
     // 已经在显示时视为同一次提醒：不再重复响铃。
     if (previous.visible) return false;
@@ -104,11 +131,66 @@ export function apply(ctx) {
     return true;
   }
 
-  /** 隐藏完成精灵。 */
-  function hideSprite() {
+  /** 取消待执行的点击动画收尾定时器。 */
+  function clearClickTimer() {
+    if (clickTimer === undefined) return;
+    clickTimer();
+    clickTimer = undefined;
+  }
+
+  /**
+   * 点击精灵：打开队首会话、消除该条，并播放一段随机的点击回应动画。
+   * @returns {void}
+   */
+  function activateNext() {
     const current = spriteStore.getSnapshot();
-    if (!current.visible) return;
-    spriteStore.set({ ...current, visible: false });
+    if (current.queue.length === 0) {
+      hideSprite();
+      return;
+    }
+    const [next, ...rest] = current.queue;
+    clearClickTimer();
+    spriteStore.set({
+      ...current,
+      visible: true,
+      queue: rest,
+      phase: 'click',
+      clickIndex: pickClickIndex(current.clickIndex),
+      clickSeq: current.clickSeq + 1,
+      sessionLabel: rest.length > 0 ? rest[0].sessionLabel : next.sessionLabel,
+    });
+    openSession(next.sessionId);
+
+    clickTimer = ctx.timeout(() => {
+      clickTimer = undefined;
+      const after = spriteStore.getSnapshot();
+      // 队列里还有会话：回到待机、等下一次点击。
+      if (after.queue.length > 0) {
+        spriteStore.set({ ...after, phase: 'idle' });
+        return;
+      }
+      // 最后一个已打开：先淡回待机动画，淡完再收起。
+      spriteStore.set({ ...after, phase: 'idle' });
+      clickTimer = ctx.timeout(() => {
+        clickTimer = undefined;
+        if (spriteStore.getSnapshot().queue.length === 0) hideSprite();
+      }, CLICK_FADE_MS);
+    }, CLICK_DURATION);
+  }
+
+  /** 清空队列并隐藏完成精灵。 */
+  function hideSprite() {
+    clearClickTimer();
+    const current = spriteStore.getSnapshot();
+    if (!current.visible && current.queue.length === 0) return;
+    spriteStore.set({
+      ...current,
+      visible: false,
+      title: '',
+      sessionLabel: '',
+      queue: [],
+      phase: 'idle',
+    });
   }
 
   // ── 提示卡片状态 ────────────────────────────────────────────────────
@@ -163,17 +245,18 @@ export function apply(ctx) {
     if (workspace !== undefined) workspace.openSession(sessionId);
   }
 
-  // ── 会话列表观察：任务完成与等待回答 ────────────────────────────────
+  // ── 会话状态观察：任务完成、等待回答与等待确认 ──────────────────────
   const observer = createSessionObserver({
     ctx,
     t,
     onTurnEnd: showSprite,
     onQuestion: (sessionId, sessionLabel) => showNotice('question', sessionId, sessionLabel),
+    onApproval: (sessionId, sessionLabel) => showNotice('approval', sessionId, sessionLabel),
   });
   ctx.effect(() => () => observer.dispose(), 'task-notify: session observer');
 
   // ── 浮层：右下角小精灵 ──────────────────────────────────────────────
-  ctx.slots.inject('shell.overlay', (surface) =>
+  ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register({
       name: 'shell.overlay',
       id: 'task-notify-sprite',
@@ -181,9 +264,8 @@ export function apply(ctx) {
       locale: NS,
       inject: () => ({
         hooks: { taskNotifySprite: spriteStore },
-        hideSprite,
-        // 由组件在渲染期调用的装饰钩子：页面启动后据此接上会话列表。
-        useSessionsList: () => observer.useSessionsList(surface),
+        activateNext,
+        dismiss: hideSprite,
       }),
     }, TaskSprite),
   );
