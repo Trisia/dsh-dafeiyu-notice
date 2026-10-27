@@ -197,6 +197,6 @@ pnpm add link:/absolute/path/to/notify-plugin
 
 ## 素材与许可
 
+- 本仓库代码采用 [MIT License](./LICENSE) 发布，Copyright (c) 2026 Quan Guanyu。
 - 点击回应动画素材来自 [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet)，由本仓库脚本离线转成雪碧图；使用或再分发请遵循原仓库的许可。
 - 钉钉提示音来自 `assets/dingtalk.mp3`，仅用于本插件提示。
-- 本仓库目前未附带独立 `LICENSE` 文件；如需对外分发，请先补充许可证并确认上述素材的授权范围。

@@ -11,6 +11,7 @@
     "./icon": "./icon.svg"
   },
   "files": [
+    "LICENSE",
     "index.js",
     "lib/client.js",
     "lib/client.js.map",
@@ -47,5 +48,6 @@
   "devDependencies": {
     "tsdown": "^0.23.2",
     "typescript": "^5.9.3"
-  }
+  },
+  "license": "MIT"
 }
