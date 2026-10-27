@@ -1,4 +1,7 @@
 node_modules/
-dist/
 *.log
 .DS_Store
+package-lock.json
+
+# 构建产物由 `pnpm build` 生成
+lib/

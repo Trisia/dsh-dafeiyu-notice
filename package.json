@@ -6,24 +6,29 @@
   "description": "Task-completion and question toasts with a DingTalk-style notification sound",
   "exports": {
     ".": "./index.js",
-    "./client": "./client.js",
+    "./client": "./lib/client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "files": [
     "index.js",
-    "client.js",
+    "lib/client.js",
+    "lib/client.js.map",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
     "assets/*.mp3"
   ],
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "immediately": true,
-      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
     }
   },
   "peerDependencies": {
@@ -33,11 +38,12 @@
     "@deepseek-ai/dsh-client-ui-settings": "*",
     "@deepseek-ai/dsh-client-ui-workspace": "*"
   },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-api-session-controller": { "optional": true },
-    "@deepseek-ai/dsh-client-locale": { "optional": true },
-    "@deepseek-ai/dsh-client-ui-conversation": { "optional": true },
-    "@deepseek-ai/dsh-client-ui-settings": { "optional": true },
-    "@deepseek-ai/dsh-client-ui-workspace": { "optional": true }
+  "scripts": {
+    "build": "tsdown",
+    "watch": "tsdown --watch",
+    "test": "node ../test-harness/browser-test.mjs"
+  },
+  "devDependencies": {
+    "tsdown": "^0.23.2"
   }
 }
