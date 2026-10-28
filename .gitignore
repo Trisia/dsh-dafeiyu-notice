@@ -6,3 +6,6 @@ package-lock.json
 # 构建产物由 `pnpm build` 生成
 lib/
 *.tsbuildinfo
+
+# 素材与超分模型的本地缓存（离线转雪碧图用）
+.devcache/

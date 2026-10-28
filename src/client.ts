@@ -2,7 +2,7 @@
  * 浏览器半边：注册大肥鱼浮层与设置行，并把会话状态变化翻译成提醒。
  */
 import { NS, PLUGIN } from './constants.js';
-import { CLICK_SHEETS } from './click-sheets.js';
+import { CLICK_SHEETS } from './clips/index.js';
 import { EN, ZH } from './locale.js';
 import { NotifySettingsRow } from './notify-settings-row.js';
 import { createSessionObserver } from './observer.js';

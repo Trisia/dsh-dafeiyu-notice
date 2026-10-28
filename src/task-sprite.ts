@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { CLICK_FRAMES, CLICK_FRAME_MS, PET_HEIGHT, PET_WIDTH, SPRITE_FRAME_MS, SPRITE_FRAMES } from './constants.js';
-import { CLICK_SHEETS } from './click-sheets.js';
+import { CLICK_SHEETS } from './clips/index.js';
 import { clampAxis, defaultSpriteSize, spriteTarget } from './session-view.js';
 import { readSpritePos, writeSpritePos } from './storage.js';
 

@@ -57,10 +57,11 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 宿主只通过 `/plugins/<id>/client.js` 提供客户端包，包内 `assets/` 不对外，因此：
 
 - 钉钉提示音由 `scripts/embed-audio.mjs` 转成 `src/dingtalk-audio.ts` 里的 data URL。
-- 点击回应动画由 `scripts/build-click-sheets.py` 转成 `src/click-sheets.ts` 里的 5 张 WebP data URL。
+- 点击回应动画由 `scripts/build-click-sheets.py` 转成 `src/clips/<id>.ts`，一段一个模块，
+  由 `src/clips/index.ts` 汇总后内联进客户端包。
 - 待机动画同样内联在 `src/sprite-sheet.ts`。
 
-这也是客户端包约 1.3 MB 的原因；换来的是不依赖宿主的资源路由，刷新即可用。
+这也是客户端包约 2.1 MB 的原因；换来的是不依赖宿主的资源路由，刷新即可用。
 
 ## 开发
 
@@ -84,7 +85,7 @@ node scripts/embed-audio.mjs
 
 ### 重新生成点击回应动画
 
-需要准备 dsh-pet 的 5 个 webm 素材，文件名固定：
+需要准备 dsh-pet 的 webm 素材，文件名与脚本顶部的 `CLIPS` 表一致：
 
 ```text
 点击回应-元气挥手.webm
@@ -92,21 +93,84 @@ node scripts/embed-audio.mjs
 点击回应-害羞惊讶.webm
 点击回应-挠痒咯咯笑.webm
 点击回应-傲娇生气.webm
+被吓一跳.webm
+原地跳跃抓碎头顶物品.webm
+打瞌睡被惊醒.webm
+原地左转奔跑.webm
 ```
 
 ```bash
 python3 scripts/build-click-sheets.py --src /path/to/webm-dir
 ```
 
+加上超分（推荐，质量明显更好，但需要更多依赖）：
+
+```bash
+python3 scripts/build-click-sheets.py \
+    --src /path/to/webm-dir \
+    --upscale --model /path/to/realesr-animevideov3.pth \
+    --cache .devcache/mask-cache
+```
+
+参数说明：
+
+| 参数 | 说明 |
+| --- | --- |
+| `--src` | 存放 webm 素材的目录 |
+| `--upscale` | 启用 Real-ESRGAN 超分再回缩到 108x114，边缘与发丝更干净 |
+| `--model` | 超分模型 `realesr-animevideov3.pth` 的路径（[下载](https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.2.5.0)） |
+| `--cache` | 超分与去残留结果的缓存目录，重复生成时跳过最慢的一步 |
+| `--only` | 只生成指定 id 的动画，例如 `--only scared wake` |
+| `--outdir` | 动画模块目录，默认 `src/clips`（一段一个文件） |
+
 依赖：
 
 - `ffmpeg`（需要 `libvpx-vp9` 解码透明通道）
-- Python 3
-- `Pillow`
-- `numpy`
-- `scipy`
+- Python 3 + `Pillow`、`numpy`、`scipy`
+- 超分额外需要：`torch`、`torchvision`、`basicsr`、`realesrgan`
 
-脚本每段取 2 秒、12fps、24 帧，按角色本体包围盒统一取景，缩放到 108×114，横向拼成 WebP，写入 `src/click-sheets.ts`。生成文件已提交，正常开发不需要重跑。
+```bash
+python3 -m venv .devcache/venv
+.devcache/venv/bin/pip install numpy scipy Pillow opencv-python-headless pyyaml
+.devcache/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+.devcache/venv/bin/pip install --no-build-isolation realesrgan basicsr
+curl -L -o .devcache/models/realesr-animevideov3.pth \
+    https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-animevideov3.pth
+```
+
+处理流程（每段动画）：
+
+1. 解码 2 秒、12fps、24 帧的 RGBA 帧，取 80ms/帧，与 `src/constants.ts` 的 `CLICK_FRAMES` / `CLICK_FRAME_MS` 对应；
+2. `--upscale` 时先按整段 alpha 并集裁出统一区域，用 Real-ESRGAN 的 animevideov3 x4 模型
+   对 RGB 推理，alpha 用三次插值放大后合成；只放 RGB 是因为素材的白底抠像会把暗边烘进 RGB，
+   连 alpha 一起放大等于把暗边加宽；
+3. 去色度抠像残留：素材自带的 alpha 已经把背景压到接近 0，真正要清的是两类残留 ——
+   背景里的雾状低 alpha 噪点（深色主题下会浮出一层灰雾），以及主体外圈 alpha 偏低、颜色又
+   贴近背景色的灰绿毛边。只清这两类，不能按颜色距离整体判定，否则白色星星、爆闪这类
+   “颜色接近背景但本身不透明”的特效会被一起删掉；
+4. 整段共用一个缩放比例（按每帧角色本体的 90 分位高度，让各段角色看起来一样大），
+   并让角色在 108x114 画布内居中，播放时不会漂移；
+5. 横向拼成 WebP（保留透明通道），写入 `src/clips/<id>.ts`，并重建 `src/clips/index.ts`。
+
+每段动画输出一个独立文件，`git diff` 只会落在改动过的那几段上：
+
+```text
+src/clips/
+├── index.ts      # 汇总索引，按 CLIPS 顺序导出 CLICK_SHEETS
+├── wave.ts       # 元气挥手
+├── ...
+└── tumble.ts     # 原地左转奔跑
+```
+
+加了新动作时，在 `CLIPS` 表里追加一行 `(id, 素材文件名, 起始秒, 展示名)`，然后只生成这一段：
+
+```bash
+python3 scripts/build-click-sheets.py --src /path/to/webm-dir \
+    --upscale --model .devcache/models/realesr-animevideov3.pth \
+    --cache .devcache/mask-cache --only newid
+```
+
+其余模块和索引都会保留，索引会按 `CLIPS` 顺序自动补上新段。生成文件已提交，正常开发不需要重跑。
 
 ### 测试
 
@@ -147,7 +211,7 @@ notify-plugin/
 │   └── dingtalk.mp3          # 提示音原始文件
 ├── scripts/
 │   ├── embed-audio.mjs       # mp3 → src/dingtalk-audio.ts
-│   └── build-click-sheets.py # webm → src/click-sheets.ts
+│   └── build-click-sheets.py # webm → 超分/去杂边 → src/clips/<id>.ts
 ├── src/
 │   ├── react.d.ts            # 最小 React 运行时类型声明
 │   ├── client.ts             # 注册槽位、状态仓库、队列与提示
@@ -163,7 +227,9 @@ notify-plugin/
 │   ├── styles-mount.ts       # 注入 <style>
 │   ├── session-view.ts       # 坐标约束等视图辅助
 │   ├── sprite-sheet.ts       # 待机动画（内联）
-│   ├── click-sheets.ts       # 5 段点击回应动画（内联，生成）
+│   ├── clips/                # 点击回应动画，一段一个模块（生成）
+│   │   ├── index.ts          # 汇总索引（生成）
+│   │   └── <id>.ts           # 单段雪碧图 data URL（生成）
 │   └── dingtalk-audio.ts     # 提示音 data URL（生成）
 └── lib/                      # 构建产物，gitignore
     ├── client.js
