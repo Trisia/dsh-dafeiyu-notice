@@ -30,9 +30,10 @@ function elementSize(element) {
  * @param {object} props.useTaskNotifySprite - 大肥鱼状态仓库的读取钩子。
  * @param {() => void} props.activateNext - 打开队首会话并播放点击动画。
  * @param {() => void} props.dismiss - 清空队列并收起大肥鱼。
+ * @param {() => void} [props.clickFinished] - 当前这段点击回应动画播完最后一帧时调用。
  * @returns {object|null} 大肥鱼元素；不显示时为 null。
  */
-export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss }) {
+export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss, clickFinished }) {
   const sprite = useTaskNotifySprite((value) => value);
   const [frame, setFrame] = React.useState(0);
   const [pos, setPos] = React.useState(readSpritePos);
@@ -43,12 +44,24 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss }) {
   const clicking = sprite.phase === 'click';
   const clickSheet = CLICK_SHEETS[sprite.clickIndex] ?? CLICK_SHEETS[0];
 
-  // 每次进入新动画（待机或点击回应）都从第一帧开始；布局阶段重置，避免闪出上一帧。
+  // 当前已生效的帧相位，取值 'idle' 或 'click'。
+  const phase = sprite.phase === 'click' ? 'click' : 'idle';
+
+  // 相位变化时帧号必须在同一轮渲染内归零，否则点击后的首帧会沿用待机动画的当前帧。
+  // 在渲染期用 state 追赶上一轮相位：React 会同步重算这次渲染，不会提交过渡帧。
+  const [markedPhase, setMarkedPhase] = React.useState(phase);
+  if (markedPhase !== phase) {
+    setMarkedPhase(phase);
+    setFrame(0);
+  }
+
+  // 每段新的点击回应（clickSeq 变化）都从第一帧开始；布局阶段重置，避免闪出上一段。
   React.useLayoutEffect(() => {
     setFrame(0);
-  }, [playing, sprite.phase, sprite.clickSeq]);
+  }, [sprite.clickSeq]);
 
-  // 按固定节奏推进帧：待机循环播放，点击回应播到最后一帧后停住。
+  // 按固定节奏推进帧：待机循环播放；点击回应按素材自身的帧数逐帧播完，
+  // 停在最后一帧时通知上层，由上层决定回到待机还是收起。
   React.useEffect(() => {
     if (!playing) return undefined;
     const timer = window.setInterval(() => {
@@ -59,6 +72,12 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss }) {
     }, clicking ? CLICK_FRAME_MS : SPRITE_FRAME_MS);
     return () => window.clearInterval(timer);
   }, [playing, clicking]);
+
+  // 点击回应到达最后一帧：本段是否播完只由素材帧数决定，与外部计时无关。
+  React.useEffect(() => {
+    if (!playing || !clicking || frame < CLICK_FRAMES - 1) return;
+    clickFinished?.();
+  }, [playing, clicking, frame, clickFinished]);
 
   // 视口尺寸变化后重新收拢坐标，防止大肥鱼停在屏幕外。
   React.useEffect(() => {

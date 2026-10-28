@@ -1,7 +1,7 @@
 /**
  * 浏览器半边：注册大肥鱼浮层与设置行，并把会话状态变化翻译成提醒。
  */
-import { CLICK_DURATION, CLICK_FADE_MS, NS, PLUGIN } from './constants.js';
+import { NS, PLUGIN } from './constants.js';
 import { CLICK_SHEETS } from './click-sheets.js';
 import { EN, ZH } from './locale.js';
 import { NotifySettingsRow } from './notify-settings-row.js';
@@ -75,7 +75,7 @@ export function apply(ctx) {
 
   // ── 大肥鱼状态 ──────────────────────────────────────────────────────
   // 大肥鱼是单例：任务完成、等待回答、等待确认都进入同一个 FIFO 队列；
-  // 每点一次打开队首会话并消除它，队列点空后播放完点击动画再收起。
+  // 每点一次打开队首会话并消除它，队列点空后等点击动画播完素材的全部帧再收起。
   const spriteStore = createStore({
     visible: false,
     title: '',
@@ -87,8 +87,6 @@ export function apply(ctx) {
     clickIndex: -1,
     clickSeq: 0,
   });
-  /** 点击动画结束后切换待机或收起的延时器。 */
-  let clickTimer;
 
   /** 不同提醒类型对应的气泡标题字典键。 */
   const TITLE_KEYS = {
@@ -149,13 +147,6 @@ export function apply(ctx) {
     return true;
   }
 
-  /** 取消待执行的点击动画收尾定时器。 */
-  function clearClickTimer() {
-    if (clickTimer === undefined) return;
-    clickTimer();
-    clickTimer = undefined;
-  }
-
   /**
    * 点击大肥鱼：打开队首会话、消除该条，并播放一段随机的点击回应动画。
    * @returns {void}
@@ -168,7 +159,6 @@ export function apply(ctx) {
     }
     const [next, ...rest] = current.queue;
     const head = rest[0];
-    clearClickTimer();
     spriteStore.set({
       ...current,
       visible: true,
@@ -181,27 +171,25 @@ export function apply(ctx) {
       sessionLabel: head ? head.sessionLabel : next.sessionLabel,
     });
     openSession(next.sessionId);
+  }
 
-    clickTimer = ctx.timeout(() => {
-      clickTimer = undefined;
-      const after = spriteStore.getSnapshot();
-      // 队列里还有会话：回到待机、等下一次点击。
-      if (after.queue.length > 0) {
-        spriteStore.set({ ...after, phase: 'idle' });
-        return;
-      }
-      // 最后一个已打开：先淡回待机动画，淡完再收起。
-      spriteStore.set({ ...after, phase: 'idle' });
-      clickTimer = ctx.timeout(() => {
-        clickTimer = undefined;
-        if (spriteStore.getSnapshot().queue.length === 0) hideSprite();
-      }, CLICK_FADE_MS);
-    }, CLICK_DURATION);
+  /**
+   * 当前这段点击回应动画播完最后一帧：队列还有会话就回到待机等下一次点击，
+   * 队列已空则直接收起，不再额外等待。
+   * @returns {void}
+   */
+  function finishClick() {
+    const current = spriteStore.getSnapshot();
+    if (current.phase !== 'click') return;
+    if (current.queue.length > 0) {
+      spriteStore.set({ ...current, phase: 'idle' });
+      return;
+    }
+    hideSprite();
   }
 
   /** 清空队列并隐藏大肥鱼。 */
   function hideSprite() {
-    clearClickTimer();
     const current = spriteStore.getSnapshot();
     if (!current.visible && current.queue.length === 0) return;
     spriteStore.set({
@@ -247,6 +235,7 @@ export function apply(ctx) {
         hooks: { taskNotifySprite: spriteStore },
         activateNext,
         dismiss: hideSprite,
+        clickFinished: finishClick,
       }),
     }, TaskSprite),
   );

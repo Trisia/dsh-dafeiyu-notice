@@ -26,12 +26,6 @@ export const CLICK_FRAME_MS = 80;
 /** 每段点击回应动画包含的帧数。 */
 export const CLICK_FRAMES = 24;
 
-/** 点击回应动画的播放时长，单位：毫秒。 */
-export const CLICK_DURATION = CLICK_FRAME_MS * CLICK_FRAMES;
-
-/** 点击动画切换到待机动画的淡出时长，单位：毫秒。 */
-export const CLICK_FADE_MS = 160;
-
 /** 偏好设置在 localStorage 中的存储键。 */
 export const STORAGE_KEY = 'dsh.taskNotify.settings.v1';
 

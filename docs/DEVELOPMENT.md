@@ -42,11 +42,11 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 }
 ```
 
-任务完成、等待回答、等待确认都调用同一个 `enqueueSprite` 进入这条 FIFO 队列。点击时先消费队首，再调用 `uiWorkspace.openSession`，因此切换和动画是同一个动作；队列里还有条目时气泡标题切到下一条的 `kind`。点击动画时长为 `24 帧 × 80ms = 1920ms`；队列为空时，切回待机后再等 160ms 淡出。
+任务完成、等待回答、等待确认都调用同一个 `enqueueSprite` 进入这条 FIFO 队列。点击时先消费队首，再调用 `uiWorkspace.openSession`，因此切换和动画是同一个动作；队列里还有条目时气泡标题切到下一条的 `kind`。点击动画按 `CLICK_FRAMES` 帧、每帧 `CLICK_FRAME_MS` 逐帧播放，由组件在到达最后一帧时回调 `clickFinished`：队列还有条目就回到待机，队列为空就直接收起，不依赖任何固定时长。
 
 ### 渲染
 
-- `TaskSprite`：待机层与点击层叠放，靠 `data-phase` 切换透明度；待机层一直循环，点击层播放完停住。
+- `TaskSprite`：待机层与点击层叠放，按 `data-phase` 只显示其中一层（`display` 切换，不做透明度过渡）；待机层一直循环，点击层播完最后一帧后回调并停住。相位变化时帧号在同一轮渲染内归零，所以点击当帧画出的就是点击动画第 0 帧，不会闪现点击前的待机画面。
 - `NotifySettingsRow`：设置页的开关行（子智能体完成 / 声音 / 提醒）。
 - 所有状态通过极简 `createStore` 暴露给宿主的 `useSyncExternalStore` 槽位。
 
