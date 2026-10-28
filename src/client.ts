@@ -33,7 +33,7 @@ export function apply(ctx) {
   const settingsStore = createStore(readSettings());
   /**
    * 更新并持久化偏好设置。
-   * @param {{enabled?: boolean, sound?: boolean}} patch - 需要变更的字段。
+   * @param {{enabled?: boolean, sound?: boolean, notifySubagent?: boolean}} patch - 需要变更的字段。
    */
   const updateSettings = (patch) => {
     const next = { ...settingsStore.getSnapshot(), ...patch };
@@ -230,6 +230,8 @@ export function apply(ctx) {
     onTurnEnd: (sessionId, sessionLabel) => enqueueSprite(sessionId, sessionLabel, 'turnEnd'),
     onQuestion: (sessionId, sessionLabel) => enqueueSprite(sessionId, sessionLabel, 'question'),
     onApproval: (sessionId, sessionLabel) => enqueueSprite(sessionId, sessionLabel, 'approval'),
+    // 子智能体完成的提醒默认关闭；等待回答、等待确认不受该开关影响。
+    shouldNotifyTurnEnd: () => settingsStore.getSnapshot().notifySubagent,
   });
   ctx.effect(() => () => observer.dispose(), 'task-notify: session observer');
 
@@ -240,6 +242,7 @@ export function apply(ctx) {
       id: 'task-notify-sprite',
       order: 90,
       locale: NS,
+      // `hooks` 内的每个键都会被当成订阅源；动作函数必须放在外层，才会原样透传给组件。
       inject: () => ({
         hooks: { taskNotifySprite: spriteStore },
         activateNext,
@@ -259,6 +262,7 @@ export function apply(ctx) {
         hooks: { taskNotifySettings: settingsStore },
         setEnabled: (value) => updateSettings({ enabled: value }),
         setSound: (value) => updateSettings({ sound: value }),
+        setNotifySubagent: (value) => updateSettings({ notifySubagent: value }),
         playPreview: () => {
           ring(false);
         },

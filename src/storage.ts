@@ -5,10 +5,10 @@ import { POS_KEY, STORAGE_KEY } from './constants.js';
 
 /**
  * 读取偏好设置的持久化内容。
- * @returns {{enabled: boolean, sound: boolean}} 合并默认值后的设置。
+ * @returns {{enabled: boolean, sound: boolean, notifySubagent: boolean}} 合并默认值后的设置。
  */
 export function readSettings() {
-  const defaults = { enabled: true, sound: true };
+  const defaults = { enabled: true, sound: true, notifySubagent: false };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaults;
@@ -16,6 +16,7 @@ export function readSettings() {
     return {
       enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : defaults.enabled,
       sound: typeof parsed.sound === 'boolean' ? parsed.sound : defaults.sound,
+      notifySubagent: typeof parsed.notifySubagent === 'boolean' ? parsed.notifySubagent : defaults.notifySubagent,
     };
   } catch (error) {
     return defaults;
@@ -24,7 +25,7 @@ export function readSettings() {
 
 /**
  * 写入偏好设置。
- * @param {{enabled: boolean, sound: boolean}} settings - 完整的设置对象。
+ * @param {{enabled: boolean, sound: boolean, notifySubagent: boolean}} settings - 完整的设置对象。
  */
 export function writeSettings(settings) {
   try {

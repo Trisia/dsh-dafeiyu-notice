@@ -21,6 +21,7 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 - 通过 `ctx.inject(['sessions', 'uiSession'])` 等待宿主服务就绪；若宿主不提供 `ctx.inject`，则回退到每秒轮询。
 - 以 `uiSession.sessionStatus` 的 `running` 变化判断运行结束，延迟 900ms 等宿主刷新投影后再确认。
 - 跳过空白会话、仍有 `pendingInteraction` 的会话，以及用户刚手动中止的会话（8 秒有效窗口）。
+- 子智能体会话（列表行 `origin === 'subagent'` 或带 `parentId`）的“任务完成”由注入的 `shouldNotifyTurnEnd()` 决定，默认返回 `false`；问答/审批不走这条判定，照常提醒。
 - 通过 `sessions.list` 的快照读取会话标题；标题为空时退回会话 id。
 - 第一次加载时已经存在的待交互请求不补入队列，只响应之后新出现的请求。
 
@@ -46,8 +47,10 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 ### 渲染
 
 - `TaskSprite`：待机层与点击层叠放，靠 `data-phase` 切换透明度；待机层一直循环，点击层播放完停住。
-- `NotifySettingsRow`：设置页的开关行。
+- `NotifySettingsRow`：设置页的开关行（子智能体完成 / 声音 / 提醒）。
 - 所有状态通过极简 `createStore` 暴露给宿主的 `useSyncExternalStore` 槽位。
+
+注入面约定：槽位 `inject` 返回对象里的 `hooks` 是有保留含义的隔间，里面的每个键都会被当成订阅源（`getSnapshot` + `subscribe`）合成 `use<Name>` 钩子；动作函数（如 `activateNext`、`dismiss`）必须放在 `hooks` 外层，才会原样透传给组件。
 
 ### 资源内联
 

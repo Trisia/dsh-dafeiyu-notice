@@ -25,9 +25,10 @@ function pendingKindOf(pending) {
  * @param {(id: string, sessionLabel: string) => void} options.onTurnEnd - 会话完成时的回调。
  * @param {(sessionId: string, sessionLabel: string) => void} options.onQuestion - 出现待回答请求时的回调。
  * @param {(sessionId: string, sessionLabel: string) => void} options.onApproval - 出现待确认请求时的回调。
+ * @param {() => boolean} [options.shouldNotifyTurnEnd] - 判定某次会话完成是否需要提醒；返回 false 时跳过。
  * @returns {{dispose: () => void}} 观察器句柄。
  */
-export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval }) {
+export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval, shouldNotifyTurnEnd }) {
   /** 已提示过的待交互请求键，避免重复提示。 */
   const announced = new Set<string>();
   /** 会话 id → 运行结束后待判定的延时器。 */
@@ -64,6 +65,17 @@ export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval }
   }
 
   /**
+   * 判断会话是否为子智能体会话（subagent / fork / AgentTeams 成员）：
+   * 宿主在列表行上标记 `origin: 'subagent'`，或给出所属主会话 `parentId`。
+   * @param {string} id - 会话 id。
+   * @returns {boolean} 是否为子智能体会话。
+   */
+  function isSubagent(id) {
+    const row = listSnapshot?.byId?.[id];
+    return row?.origin === 'subagent' || row?.parentId !== undefined;
+  }
+
+  /**
    * 会话停止运行后判定是否为“任务完成”并提示。
    * @param {string} id - 会话 id。
    */
@@ -73,6 +85,7 @@ export function createSessionObserver({ ctx, onTurnEnd, onQuestion, onApproval }
     if (status === undefined || status.running !== false) return;
     if (status.pendingInteraction !== undefined && status.pendingInteraction !== null) return;
     if (isBlank(id)) return;
+    if (isSubagent(id) && shouldNotifyTurnEnd?.() === false) return;
     onTurnEnd(id, labelOf(id));
   }
 
