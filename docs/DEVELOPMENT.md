@@ -81,7 +81,7 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 ```bash
 pnpm install      # 安装 tsdown 与 typescript
 pnpm typecheck    # tsc --noEmit 类型检查
-pnpm build        # 编译 index.ts、生成内嵌音频并构建 lib/client.js
+pnpm build        # 编译 index.ts、生成内嵌音频并构建 dist/client.js
 pnpm watch        # tsdown 监听构建，适合改 UI 时使用
 ```
 
@@ -258,7 +258,7 @@ notify-plugin/
 │   │   ├── index.ts          # 汇总索引（生成）
 │   │   └── <id>.ts           # 单段雪碧图 data URL（生成）
 │   └── dingtalk-audio.ts     # 提示音 data URL（生成）
-└── lib/                      # 构建产物，gitignore
+└── dist/                     # 构建产物，gitignore
     ├── client.js
     └── client.js.map
 ```

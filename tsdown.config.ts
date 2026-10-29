@@ -5,7 +5,7 @@ const id = '@cliven/dsh-dafeiyu-notice';
 
 export default {
   entry: { client: 'src/client.ts' },
-  outDir: 'lib',
+  outDir: 'dist',
   format: ['cjs'],
   platform: 'browser',
   target: 'es2022',

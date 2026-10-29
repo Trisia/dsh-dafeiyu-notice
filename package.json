@@ -2,18 +2,18 @@
   "name": "@cliven/dsh-dafeiyu-notice",
   "version": "1.0.0",
   "type": "module",
-  "description": "Task completion, question and approval reminders with a big-fish queue and a DingTalk-style sound",
+  "description": "Task completion, question and approval reminders: a Dafeiyu big-fish notice with a DingTalk-style sound",
   "exports": {
     ".": "./index.js",
-    "./client": "./lib/client.js",
+    "./client": "./dist/client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "files": [
     "LICENSE",
     "index.js",
-    "lib/client.js",
-    "lib/client.js.map",
+    "dist/client.js",
+    "dist/client.js.map",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
