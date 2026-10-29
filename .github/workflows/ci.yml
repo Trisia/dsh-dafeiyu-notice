@@ -47,5 +47,6 @@ jobs:
         run: pnpm build
 
       # 构建会重新生成 index.js 与内嵌音频；若与仓库不一致，说明产物或素材没有提交。
+      # 雪碧图内联模块（src/generated/）不入库，由构建现场生成，不参与这项比对。
       - name: Check build output is committed
         run: git diff --exit-code -- index.js src/dingtalk-audio.ts

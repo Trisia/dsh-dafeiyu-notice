@@ -42,9 +42,9 @@
     "@deepseek-ai/dsh-client-ui-workspace": "*"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.host.json && node scripts/embed-audio.mjs && tsdown",
-    "typecheck": "tsc --noEmit",
-    "watch": "tsdown --watch"
+    "build": "node scripts/embed-web-assets.mjs && tsc -p tsconfig.host.json && node scripts/embed-audio.mjs && tsdown",
+    "typecheck": "node scripts/embed-web-assets.mjs && tsc --noEmit",
+    "watch": "node scripts/embed-web-assets.mjs && tsdown --watch"
   },
   "devDependencies": {
     "tsdown": "^0.23.2",

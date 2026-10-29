@@ -2,11 +2,13 @@
  * 大肥鱼与偏好设置行的样式。
  *
  * 只引用宿主主题令牌（--dsw-alias-*），保证浅色与深色主题下都能融入界面。
- * 大肥鱼尺寸随 {@link PET_WIDTH} / {@link SPRITE_FRAMES} 与缩放比例计算，与逐帧位移保持同一来源；
+ * 画布尺寸一直取 {@link PET_WIDTH} / {@link PET_HEIGHT} 的基准值（由缩放比例决定）；
+ * 待机层与点击层都由 2 倍密度的雪碧图组成，显示时按画布尺寸铺背景（素材等比缩小），
+ * 缩放比例通过内联样式覆盖 background-size / background-position；
  * 待机与点击回应两层叠放，按帧相位显示其中一层，不做透明度过渡。
  */
 import { PET_HEIGHT, PET_WIDTH, SPRITE_FRAMES } from './constants.js';
-import { SPRITE_SHEET } from './sprite-sheet.js';
+import { IDLE_SHEET } from './generated/sheets.js';
 
 export const CSS = `
 
@@ -16,7 +18,7 @@ export const CSS = `
 .dshtn-pet-canvas:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:4px;border-radius:10px;}
 .dshtn-pet-canvas{position:relative;width:${PET_WIDTH}px;height:${PET_HEIGHT}px;}
 .dshtn-pet-img,.dshtn-pet-click{position:absolute;inset:0;width:100%;height:100%;background-repeat:no-repeat;}
-.dshtn-pet-img{background-image:url(${SPRITE_SHEET});background-size:${PET_WIDTH * SPRITE_FRAMES}px ${PET_HEIGHT}px;}
+.dshtn-pet-img{background-image:url(${IDLE_SHEET});background-size:${PET_WIDTH * SPRITE_FRAMES}px ${PET_HEIGHT}px;}
 .dshtn-pet-click{display:none;}
 .dshtn-pet[data-phase="click"] .dshtn-pet-img{display:none;}
 .dshtn-pet[data-phase="click"] .dshtn-pet-click{display:block;}

@@ -6,8 +6,6 @@ import React from 'react';
 import {
   CLICK_FRAMES,
   CLICK_FRAME_MS,
-  CLICK_HEIGHT,
-  CLICK_WIDTH,
   PET_HEIGHT,
   PET_WIDTH,
   SPRITE_FRAME_MS,
@@ -328,6 +326,8 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss, clic
         className: 'dshtn-pet-img',
         'aria-hidden': true,
         style: {
+          // 雪碧图是 216x227 的 2 倍密度素材，画布只有 108x114：
+          // 背景尺寸必须按画布尺寸铺开，让素材等比缩小；按素材像素铺会只显示左上 1/4。
           backgroundSize: `${PET_WIDTH * SPRITE_FRAMES * scale}px ${PET_HEIGHT * scale}px`,
           backgroundPosition: `${-(frame % SPRITE_FRAMES) * PET_WIDTH * scale}px 0`,
         },
@@ -337,8 +337,9 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss, clic
         'aria-hidden': true,
         style: {
           backgroundImage: `url(${clickSheet.sheet})`,
-          backgroundSize: `${CLICK_WIDTH * CLICK_FRAMES * scale}px ${CLICK_HEIGHT * scale}px`,
-          backgroundPosition: `${-(frame % CLICK_FRAMES) * CLICK_WIDTH * scale}px 0`,
+          // 同上：24 帧的 216x228 素材按画布尺寸（108x114）铺开，整帧才能完整显示。
+          backgroundSize: `${PET_WIDTH * CLICK_FRAMES * scale}px ${PET_HEIGHT * scale}px`,
+          backgroundPosition: `${-(frame % CLICK_FRAMES) * PET_WIDTH * scale}px 0`,
         },
       }),
     ),

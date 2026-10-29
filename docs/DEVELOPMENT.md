@@ -64,12 +64,15 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 
 ### 资源内联
 
-宿主只通过 `/plugins/<id>/client.js` 提供客户端包，包内 `assets/` 不对外，因此：
+宿主只通过 `/plugins/<id>/client.js` 提供客户端包，包内 `assets/` 不对外，因此所有素材都在构建时内联：
 
-- 钉钉提示音由 `scripts/embed-audio.mjs` 转成 `src/dingtalk-audio.ts` 里的 data URL。
-- 点击回应动画由 `scripts/build-click-sheets.py` 转成 `src/clips/<id>.ts`，一段一个模块，
-  由 `src/clips/index.ts` 汇总后内联进客户端包。
-- 待机动画同样内联在 `src/sprite-sheet.ts`。
+- 钉钉提示音以 `assets/dingtalk.mp3` 为源，`scripts/embed-audio.mjs` 在构建时转成 `src/dingtalk-audio.ts` 里的 data URL。
+- 点击回应动画以 `assets/web/<id>.webp` 为源（一段一个文件），`scripts/embed-web-assets.mjs`
+  在构建时统一内联成 `src/generated/sheets.ts`；`src/clips/<id>.ts` 只保留 id、名称与对生成常量的引用。
+- 待机动画同理，源文件是 `assets/web/idle.webp`。
+
+`src/generated/sheets.ts` 不入库（见 `.gitignore`），`pnpm build` 与 `pnpm typecheck` 都会先重新生成它；
+素材本身以 WebP 二进制提交，比 base64 小约 25%，`git diff` 也不再是一行几 MB 的乱码。
 
 点击回应动画的单帧是 216x228（每段 24 帧后约 420~470 KB），九段合计约 4 MB，
 再加上待机和提示音，客户端包约 5 MB；换来的是不依赖宿主的资源路由，刷新即可用。
@@ -80,9 +83,9 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 
 ```bash
 pnpm install      # 安装 tsdown 与 typescript
-pnpm typecheck    # tsc --noEmit 类型检查
-pnpm build        # 编译 index.ts、生成内嵌音频并构建 dist/client.js
-pnpm watch        # tsdown 监听构建，适合改 UI 时使用
+pnpm typecheck    # 生成内联素材 + tsc --noEmit 类型检查
+pnpm build        # 生成内联素材与音频、编译 index.ts、构建 dist/client.js
+pnpm watch        # 生成内联素材后 tsdown 监听构建，适合改 UI 时使用
 ```
 
 ### 挂到 DSH profile
@@ -147,7 +150,7 @@ python3 scripts/build-click-sheets.py --src /path/to/webm-dir
 | --- | --- |
 | `--src` | 存放 webm 素材的目录 |
 | `--only` | 只生成指定 id 的动画，例如 `--only scared wake` |
-| `--outdir` | 动画模块目录，默认 `src/clips`（一段一个文件） |
+| `--outdir` | 雪碧图 WebP 输出目录，默认 `assets/web`（一段一个文件） |
 
 依赖：
 
@@ -165,7 +168,7 @@ python3 -m venv .devcache/venv
 2. 交给 `scripts/build-alpha.py` 抠像（流程见下文「抠像与杂边」）；
 3. 整段共用一个缩放比例（按每帧角色本体的 90 分位高度，让各段角色看起来一样大），
    并让角色在 216x228 画布内居中，播放时不会漂移；
-4. 横向拼成 WebP（保留透明通道），写入 `src/clips/<id>.ts`，并重建 `src/clips/index.ts`。
+4. 横向拼成 WebP（保留透明通道），写入 `assets/web/<id>.webp`。
 
 单帧尺寸 216x228 由 `src/constants.ts` 的 `CLICK_WIDTH` / `CLICK_HEIGHT` 与脚本共同约定。
 画布尺寸一直是 108x114（由缩放比例决定），所以把单帧从 108x114 提到 216x228 后，
@@ -174,20 +177,30 @@ python3 -m venv .devcache/venv
 每段动画输出一个独立文件，`git diff` 只会落在改动过的那几段上：
 
 ```text
-src/clips/
-├── index.ts      # 汇总索引，按 CLIPS 顺序导出 CLICK_SHEETS
-├── wave.ts       # 元气挥手
+assets/web/
+├── wave.webp     # 元气挥手
 ├── ...
-└── tumble.ts     # 原地左转奔跑
+└── tumble.webp   # 原地左转奔跑
 ```
 
-加了新动作时，在 `CLIPS` 表里追加一行 `(id, 素材文件名, 起始秒, 展示名)`，然后只生成这一段：
+对应的元数据在 `src/clips/` 里手写维护，不随素材生成：
+
+```text
+src/clips/
+├── index.ts      # 汇总索引，按随机池顺序导出 CLICK_SHEETS
+├── wave.ts       # id、展示名 + 引用生成的 data URL
+├── ...
+└── tumble.ts
+```
+
+加了新动作时，在 `CLIPS` 表里追加一行 `(id, 素材文件名, 起始秒, 展示名)`，只生成这一段：
 
 ```bash
 python3 scripts/build-click-sheets.py --src /path/to/webm-dir --only newid
 ```
 
-其余模块和索引都会保留，索引会按 `CLIPS` 顺序自动补上新段。生成文件已提交，正常开发不需要重跑。
+再新增 `src/clips/<newid>.ts`（从 `../generated/sheets.js` 导入 `<NEWID>_SHEET_DATA`）并在 `index.ts` 登记。
+`src/generated/sheets.ts` 由 `scripts/embed-web-assets.mjs` 在构建时生成，正常开发不需要手动重跑。
 
 ### 抠像与杂边
 
@@ -195,7 +208,7 @@ python3 scripts/build-click-sheets.py --src /path/to/webm-dir --only newid
 颜色被白底冲淡的灰边，深色主题下会显出一道灰绿描边；轮廓内侧还有实色的细描边，
 清灰边时不能顺手削掉；爱心、星星、花边这类浅色对象的外圈还会泛出白色描边光。
 
-`scripts/build-alpha.py` 是点击动画的抠像实现：
+`scripts/build-alpha.py` 是点击动画与待机动画共用的抠像实现：
 
 1. 用 `-c:v libvpx-vp9` 解码：ffmpeg 默认会选原生 vp9 解码器，它读不出 alpha 平面；
 2. 把二值轮廓外扩 4px 再回缩 1px，框出轮廓外压着的那圈灰带；只往外侧扩，
@@ -211,6 +224,26 @@ python3 scripts/build-click-sheets.py --src /path/to/webm-dir --only newid
 ```bash
 python3 scripts/key-preview.py --src .devcache/webm/点击回应-元气挥手.webm --at 3.4 --box 200,40,470,345 --zoom 4
 ```
+
+### 重新生成待机动画
+
+待机（“等待”状态抱着双臂打瞌睡的那段）与点击回应动画走同一套规范：同样的边缘清理、
+同样按角色本体取景，单帧 216x227，20 帧，与 `src/constants.ts` 的 `IDLE_WIDTH` / `IDLE_HEIGHT`
+及 `SPRITE_FRAMES` 对应。
+
+```bash
+python3 scripts/build-idle-sheet.py
+```
+
+脚本读取现有的 `assets/web/idle.webp`，把 20 帧拆出来，逐帧过 `build-alpha.py` 的
+`refine_fringe` / `clamp_white_edge`（灰带还原前景色 + 浅色薄边清掉），再按整段包围盒
+统一取景回 216x227 画布，最后压缩成 WebP 写回。输出尺寸与输入一致，重复运行只会
+把边缘再清理一遍；原始 webm 不在仓库里，所以以现有雪碧图作为输入。
+
+| 参数 | 说明 |
+| --- | --- |
+| `--src` | 待机雪碧图 WebP 路径，默认 `assets/web/idle.webp` |
+| `--out` | 输出 WebP 路径，默认与 `--src` 相同 |
 
 ## 目录结构
 
@@ -233,11 +266,16 @@ notify-plugin/
 │   ├── en.json
 │   └── zh.json
 ├── assets/
-│   └── dingtalk.mp3          # 提示音原始文件
+│   ├── dingtalk.mp3          # 提示音原始文件
+│   └── web/                  # 动画雪碧图（WebP，构建时内联）
+│       ├── idle.webp         # 待机动画，20 帧
+│       └── <id>.webp         # 点击回应动画，每段 24 帧
 ├── scripts/
 │   ├── embed-audio.mjs       # mp3 → src/dingtalk-audio.ts
+│   ├── embed-web-assets.mjs  # assets/web/*.webp → src/generated/sheets.ts
 │   ├── build-alpha.py        # 共用抠像：解码 + 去灰边 + 还原前景色
-│   ├── build-click-sheets.py # webm → 抠像 → 放大取景 → src/clips/<id>.ts
+│   ├── build-idle-sheet.py   # 待机雪碧图：统一边缘清理与取景 → assets/web/idle.webp
+│   ├── build-click-sheets.py # webm → 抠像 → 放大取景 → assets/web/<id>.webp
 │   └── key-preview.py        # 抠像效果的深/浅色背景对比图
 ├── src/
 │   ├── react.d.ts            # 最小 React 运行时类型声明
@@ -253,10 +291,11 @@ notify-plugin/
 │   ├── styles.ts             # 全部样式
 │   ├── styles-mount.ts       # 注入 <style>
 │   ├── session-view.ts       # 坐标与缩放约束等视图辅助
-│   ├── sprite-sheet.ts       # 待机动画（内联）
-│   ├── clips/                # 点击回应动画，一段一个模块（生成）
-│   │   ├── index.ts          # 汇总索引（生成）
-│   │   └── <id>.ts           # 单段雪碧图 data URL（生成）
+│   ├── clips/                # 点击回应动画的元数据（手写）
+│   │   ├── index.ts          # 汇总索引
+│   │   └── <id>.ts           # id、展示名 + 引用生成的 data URL
+│   ├── generated/            # 构建时生成，gitignore
+│   │   └── sheets.ts         # 全部雪碧图的 data URL
 │   └── dingtalk-audio.ts     # 提示音 data URL（生成）
 └── dist/                     # 构建产物，gitignore
     ├── client.js
@@ -265,7 +304,7 @@ notify-plugin/
 
 ## 持续集成
 
-推送任意分支都会触发 [`ci.yml`](../.github/workflows/ci.yml)：依次安装依赖、类型检查、构建，并检查 `index.js` 与 `src/dingtalk-audio.ts` 是否已随源码提交。打 `v*` 标签时该工作流不运行，由发布流程完成同样的校验。
+推送任意分支都会触发 [`ci.yml`](../.github/workflows/ci.yml)：依次安装依赖、类型检查、构建，并检查 `index.js` 与 `src/dingtalk-audio.ts` 是否已随源码提交。雪碧图内联模块 `src/generated/sheets.ts` 由构建现场生成、不入库，因此不参与该比对。打 `v*` 标签时该工作流不运行，由发布流程完成同样的校验。
 
 ## 发布
 
@@ -282,6 +321,20 @@ notify-plugin/
    ```
 
 3. 在 GitHub Actions 里查看 `Publish` 工作流；成功后 Releases 里会出现 `v1.1.0`。失败时按日志修复后重跑（同一版本已发布时需要先升级版本）。
+
+### 发布后的暂存审批
+
+npm 的 [staged publishing](https://docs.npmjs.com/staged-publishing/) 可能把 CI 上传的版本先放进暂存队列，此时公共 registry 只有占位版本 `0.0.0-stage`（元数据里写着 `Temporary package placeholder for staged publishing`），`npm view` 查不到真实版本。需要在 npm 上手动批准：
+
+- 网页：登录 npmjs.com，打开 <https://www.npmjs.com/package/@cliven/dsh-dafeiyu-notice>，在暂存条目上点 Approve 并完成 2FA；
+- CLI（npm ≥ 11.15，需要先 `npm login`）：
+
+  ```bash
+  npm stage list
+  npm stage approve <stage-id> --otp <验证码>
+  ```
+
+批准后 `npm view @cliven/dsh-dafeiyu-notice version` 返回真实版本（registry 有 `max-age=300` 的 CDN 缓存，最多等 5 分钟）。GitHub Release 在发布成功后即创建，不受暂存影响。
 
 仓库需要配置 `NPM_TOKEN` Secret：在 npm 生成 **Granular Access Token**（读写权限、允许发布并绕过 2FA），加到仓库的 Actions secrets 中。首次发布前令牌只能选 **All packages**，发布成功后可以收敛到本包；令牌有有效期，过期后 CI 会报 401，需要重新生成并更新 Secret。`@cliven` 作用域与 `publishConfig.access: public` 已在 `package.json` 里配置，发布包名为 `@cliven/dsh-dafeiyu-notice`，首次发布前确认 npm 账号有该作用域的发布权限。
 

@@ -1,6 +1,6 @@
 /**
- * 点击回应动画索引：每段动画独立一个模块，新增动作只需新增文件并重跑生成脚本。
- * 顺序即随机池顺序。由 scripts/build-click-sheets.py 维护，请勿手改。
+ * 点击回应动画索引：每段动画独立一个模块，新增动作只需放入 assets/web/<id>.webp、
+ * 新增同名模块并在这里登记。顺序即随机池顺序。
  */
 import { WAVE_SHEET } from './wave.js';
 import { HAPPY_SHEET } from './happy.js';

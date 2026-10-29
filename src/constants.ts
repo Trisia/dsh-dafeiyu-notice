@@ -56,6 +56,12 @@ export const PET_WIDTH = 108;
 /** 大肥鱼基准高度，单位：像素；实际高度为基准高度乘以缩放比例。 */
 export const PET_HEIGHT = 114;
 
+/** 待机动画单帧宽度，单位：像素；与 scripts/build-idle-sheet.py 的 FRAME_WIDTH 一致。 */
+export const IDLE_WIDTH = 216;
+
+/** 待机动画单帧高度，单位：像素；与 scripts/build-idle-sheet.py 的 FRAME_HEIGHT 一致。 */
+export const IDLE_HEIGHT = 227;
+
 /** 点击回应动画单帧宽度，单位：像素；与 scripts/build-click-sheets.py 的 FRAME_WIDTH 一致。 */
 export const CLICK_WIDTH = 216;
 

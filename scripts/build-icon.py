@@ -7,7 +7,7 @@
 
 处理流程：
 
-1. 从 `src/sprite-sheet.ts` 解出待机雪碧图的第 0 帧（216x227，2 倍图）；
+1. 从 `assets/web/idle.webp` 解出待机雪碧图的第 0 帧（216x227，2 倍图）；
 2. 裁掉四周空白，只保留头部到胸口的一段；
 3. 按固定宽度缩放后贴到 64x64 的圆角底板上，超出底板的部分由 clipPath 裁掉；
 4. PNG 以 base64 内联进 SVG，写出 `icon.svg`（低于宿主 256 KiB 的图标上限）。
@@ -22,7 +22,6 @@ import argparse
 import base64
 import io
 import os
-import re
 
 from PIL import Image
 
@@ -48,15 +47,10 @@ MAX_ICON_BYTES = 256 * 1024
 def sheet_frame(path):
     """读取待机雪碧图并返回指定帧。
 
-    @param path: `src/sprite-sheet.ts` 的路径。
+    @param path: `assets/web/idle.webp` 的路径。
     @returns: 第 {@link FRAME_INDEX} 帧的 RGBA 图像。
-    @throws SystemExit: 文件里找不到内联的 WebP data URL 时抛出。
     """
-    with open(path, encoding='utf-8') as handle:
-        match = re.search(r"data:image/webp;base64,([A-Za-z0-9+/=]+)", handle.read())
-    if match is None:
-        raise SystemExit(f'{path} 里找不到待机雪碧图的 data URL')
-    sheet = Image.open(io.BytesIO(base64.b64decode(match.group(1)))).convert('RGBA')
+    sheet = Image.open(path).convert('RGBA')
     frame_width = sheet.width // SHEET_FRAMES
     left = FRAME_INDEX * frame_width
     return sheet.crop((left, 0, left + frame_width, sheet.height))
@@ -113,7 +107,7 @@ def main():
     @returns: 无返回值；图标超过宿主上限时抛出 SystemExit。
     """
     parser = argparse.ArgumentParser(description='生成大肥鱼插件图标')
-    parser.add_argument('--sheet', default='src/sprite-sheet.ts', help='待机雪碧图模块路径')
+    parser.add_argument('--sheet', default='assets/web/idle.webp', help='待机雪碧图 WebP 路径')
     parser.add_argument('--out', default='icon.svg', help='图标输出路径')
     args = parser.parse_args()
 

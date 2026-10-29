@@ -7,5 +7,11 @@ package-lock.json
 dist/
 *.tsbuildinfo
 
+# 内联素材模块由 `scripts/embed-web-assets.mjs` 从 assets/web/*.webp 生成
+src/generated/
+
+# Python 脚本运行产生的缓存
+__pycache__/
+
 # 素材与超分模型的本地缓存（离线转雪碧图用）
 .devcache/

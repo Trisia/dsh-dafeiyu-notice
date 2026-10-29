@@ -57,6 +57,7 @@ jobs:
         run: pnpm build
 
       # 构建会重新生成 index.js 与内嵌音频；若与仓库不一致，说明产物或素材没有提交。
+      # 雪碧图内联模块（src/generated/）不入库，由构建现场生成，不参与这项比对。
       - name: Check build output is committed
         run: git diff --exit-code -- index.js src/dingtalk-audio.ts
 
@@ -67,6 +68,13 @@ jobs:
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 记录发布结果。npm 可能把版本放进暂存队列，需要维护者完成 2FA 批准后才对消费者可见。
+      - name: Report publish status
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "::notice::已上传 @cliven/dsh-dafeiyu-notice@${version}（标签 ${GITHUB_REF_NAME}）"
+          echo "若 npm 上暂时查不到该版本，说明它进入了暂存队列，需要在 https://www.npmjs.com/package/@cliven/dsh-dafeiyu-notice 完成 2FA 批准。"
 
       # 发布成功后才创建 Release，避免 npm 失败时留下一个空发布。
       # 说明由 GitHub 按提交自动生成；预发布版本（版本号带 -）标记为 prerelease。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""把 dsh-pet 的「点击回应」webm 素材转成内联雪碧图模块。
+"""把 dsh-pet 的「点击回应」webm 素材转成雪碧图 WebP。
 
 处理流程（每段动画）：
 
@@ -8,15 +8,16 @@
    深色主题下不再浮出灰绿描边（详见该脚本的说明）；
 3. 整段共用一个缩放比例（按每帧角色本体的 90 分位高度，让各段角色看起来一样大），
    并让角色在 FRAME_WIDTH x FRAME_HEIGHT 画布内居中，播放时不漂移；
-4. 横向拼成 WebP（保留透明通道），写入 `src/clips/<id>.ts`，并重建 `src/clips/index.ts`。
+4. 横向拼成 WebP（保留透明通道），写入 `assets/web/<id>.webp`。
 
-每段动画输出一个独立模块（默认 `src/clips/<id>.ts`），供客户端包直接内联使用；
-新增动作只需在 `CLIPS` 里加一行，然后只生成这一段。
+每段动画输出一个独立 WebP（默认 `assets/web/<id>.webp`），构建时由
+`scripts/embed-web-assets.mjs` 内联进客户端包；新增动作只需在 `CLIPS`
+里加一行，并在 `src/clips/` 补一个同名模块。
 
 依赖：ffmpeg（libvpx-vp9 解码透明通道）、Python 3、Pillow、numpy、scipy。
 
 用法：
-    python3 scripts/build-click-sheets.py --src /path/to/webm [--outdir src/clips]
+    python3 scripts/build-click-sheets.py --src /path/to/webm [--outdir assets/web]
     python3 scripts/build-click-sheets.py --src .devcache/webm --only wave happy
 
 `--src` 目录需要包含 CLIPS 里列出的素材文件名（与 dsh-pet 仓库一致）。
@@ -24,12 +25,9 @@
 """
 
 import argparse
-import base64
-import glob
 import importlib.util
 import io
 import os
-import re
 import tempfile
 
 import numpy as np
@@ -141,92 +139,15 @@ def encode_webp(sheet):
     return buffer.getvalue()
 
 
-def const_name(key):
-    """把动画 id 转成导出常量名，例如 scared -> SCARED_SHEET。
-
-    @param key: 动画 id。
-    @returns: 常量名。
-    """
-    return key.upper() + '_SHEET'
-
-
-def render_clip_module(key, name, file_name, start, sheet):
-    """生成单段动画的模块源码（一个文件一段，方便独立新增与回溯）。
-
-    @param key: 动画 id。
-    @param name: 展示名。
-    @param file_name: 素材文件名（不含扩展名）。
-    @param start: 截取起始时间，单位：秒。
-    @param sheet: WebP 字节。
-    @returns: 模块源码文本。
-    """
-    data = base64.b64encode(sheet).decode()
-    return (
-        '/**\n'
-        f' * 点击回应动画「{name}」：{FRAMES} 帧，单帧 {FRAME_WIDTH}x{FRAME_HEIGHT}。\n'
-        ' *\n'
-        f' * 素材：dsh-pet《{file_name}.webm》第 {start} 秒起的 {FRAMES / FPS:g} 秒。\n'
-        ' * 由 scripts/build-click-sheets.py 离线转换并内联为 data URL，请勿手改。\n'
-        ' * 素材来源：https://github.com/PC2005-cloud/dsh-pet\n'
-        ' */\n'
-        '\n'
-        f"export const {const_name(key)} = {{\n"
-        f"  id: '{key}',\n"
-        f"  name: '{name}',\n"
-        f"  sheet: 'data:image/webp;base64,{data}',\n"
-        '};\n'
-    )
-
-
-def rebuild_index(outdir):
-    """扫描已有动画模块并重建索引文件，顺序优先跟随 CLIPS 表。
-
-    @param outdir: 动画模块所在目录。
-    @returns: 索引里登记的动画 id 列表。
-    """
-    pattern = re.compile(
-        r"export const (\w+) = \{\n  id: '([^']+)',\n  name: '([^']+)',")
-    found = {}
-    for path in sorted(glob.glob(os.path.join(outdir, '*.ts'))):
-        if os.path.basename(path) == 'index.ts':
-            continue
-        match = pattern.search(open(path, encoding='utf-8').read())
-        if match:
-            found[match.group(2)] = (match.group(1), match.group(3), os.path.basename(path)[:-3])
-    order = [key for key, _, _, _ in CLIPS if key in found]
-    order += [key for key in sorted(found) if key not in order]
-
-    lines = [
-        '/**',
-        ' * 点击回应动画索引：每段动画独立一个模块，新增动作只需新增文件并重跑生成脚本。',
-        ' * 顺序即随机池顺序。由 scripts/build-click-sheets.py 维护，请勿手改。',
-        ' */',
-    ]
-    for key in order:
-        symbol, _, module = found[key]
-        lines.append(f"import {{ {symbol} }} from './{module}.js';")
-    lines += [
-        '',
-        '/** @type {Array<{id: string, name: string, sheet: string}>} */',
-        'export const CLICK_SHEETS = [',
-    ]
-    for key in order:
-        lines.append(f'  {found[key][0]},')
-    lines += ['];', '']
-    with open(os.path.join(outdir, 'index.ts'), 'w', encoding='utf-8') as handle:
-        handle.write('\n'.join(lines))
-    return order
-
-
 def main():
-    """解析命令行参数并生成按段拆分的动画模块。
+    """解析命令行参数并生成按段拆分的雪碧图 WebP。
 
     @returns: 无返回值；失败时抛出 SystemExit。
     """
-    parser = argparse.ArgumentParser(description='生成点击回应动画模块')
+    parser = argparse.ArgumentParser(description='生成点击回应动画雪碧图')
     parser.add_argument('--src', required=True, help='包含 dsh-pet webm 素材的目录')
-    parser.add_argument('--outdir', default='src/clips', help='动画模块输出目录')
-    parser.add_argument('--only', nargs='*', help='只生成指定 id 的动画，其余模块保持不变')
+    parser.add_argument('--outdir', default='assets/web', help='雪碧图 WebP 输出目录')
+    parser.add_argument('--only', nargs='*', help='只生成指定 id 的动画，其余素材保持不变')
     args = parser.parse_args()
 
     alpha = load_alpha()
@@ -243,14 +164,12 @@ def main():
             sheet = build_sheet(source, start, workdir, key, alpha)
             encoded = encode_webp(sheet)
             total += len(encoded)
-            path = os.path.join(args.outdir, f'{key}.ts')
-            with open(path, 'w', encoding='utf-8') as handle:
-                handle.write(render_clip_module(key, name, file_name, start, encoded))
+            path = os.path.join(args.outdir, f'{key}.webp')
+            with open(path, 'wb') as handle:
+                handle.write(encoded)
             print(f'{key}: {FRAMES} 帧 {FRAME_WIDTH}x{FRAME_HEIGHT}，{len(encoded)} 字节 -> {path}',
                   flush=True)
 
-    order = rebuild_index(args.outdir)
-    print(f'索引 {args.outdir}/index.ts：{len(order)} 段（{", ".join(order)}）')
     print(f'本次生成素材合计 {total} 字节')
 
 
