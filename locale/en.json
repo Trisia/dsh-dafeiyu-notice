@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Task Notify & DingTalk Sound",
+    "title": "Dafeiyu Done Reminder",
     "description": "Shows a floating notice and plays the DingTalk sound whenever any session finishes a task or asks a multiple-choice question."
   }
 }
