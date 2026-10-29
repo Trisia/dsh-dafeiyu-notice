@@ -3,7 +3,7 @@
  */
 
 /** 插件包名，同时用作样式标签的归属标记与音频元素标记。 */
-export const PLUGIN = '@local/dsh-plugin-task-notify';
+export const PLUGIN = '@cliven/dsh-dafeiyu-notice';
 
 /** 字典命名空间。 */
 export const NS = 'taskNotify';
@@ -55,3 +55,9 @@ export const PET_WIDTH = 108;
 
 /** 大肥鱼基准高度，单位：像素；实际高度为基准高度乘以缩放比例。 */
 export const PET_HEIGHT = 114;
+
+/** 点击回应动画单帧宽度，单位：像素；与 scripts/build-click-sheets.py 的 FRAME_WIDTH 一致。 */
+export const CLICK_WIDTH = 216;
+
+/** 点击回应动画单帧高度，单位：像素；与 scripts/build-click-sheets.py 的 FRAME_HEIGHT 一致。 */
+export const CLICK_HEIGHT = 228;

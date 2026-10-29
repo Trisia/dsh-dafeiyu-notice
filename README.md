@@ -15,13 +15,35 @@
 
 ## 目录
 
-- [功能](#功能)
 - [安装](#安装)
+- [功能](#功能)
 - [使用](#使用)
 - [设置](#设置)
 - [开发文档](#开发文档)
 - [常见问题](#常见问题)
 - [素材与许可](#素材与许可)
+
+## 安装
+
+在 DSH 的 **设置 → 插件 → 添加插件** 中填入插件名：
+
+<p align="center">
+  <img src="./docs/plugin-install.png" alt="DSH 添加插件对话框，输入框里填写 @cliven/dsh-dafeiyu-notice" width="100%">
+</p>
+
+```text
+@cliven/dsh-dafeiyu-notice
+```
+
+也可以直接用命令行安装：
+
+```bash
+dsh plugin add @cliven/dsh-dafeiyu-notice
+```
+
+插件包内的 `cordis.patch.yml` 会自动把 `task-notify` 条目插入 profile，安装后重启 DSH Web 服务并刷新页面即可。
+
+从源码构建并在本地挂载到 profile 的方法见 [开发文档](./docs/DEVELOPMENT.md#挂到-dsh-profile)。
 
 ## 功能
 
@@ -88,49 +110,6 @@
 - **主题适配**：颜色使用宿主的 `--dsw-alias-*` 主题令牌，浅色/深色主题都可融入。
 - **中英文文案**：跟随宿主语言，提供 `zh` / `en` 两套字典。
 - **键盘与读屏**：大肥鱼是有 `role="button"` 的焦点元素，支持 Enter / 空格；读屏软件合成的 click 也能触发切换。
-
-## 安装
-
-### 前置条件
-
-- 可运行的 DSH Web 环境。
-- Node.js 与 pnpm。
-
-### 构建
-
-```bash
-cd /absolute/path/to/notify-plugin
-pnpm install
-pnpm build
-```
-
-源码使用 TypeScript，构建会生成 Host 入口 `index.js` 与客户端包 `lib/client.js`；类型检查可用 `pnpm typecheck`。更完整的构建说明见 [开发文档](./docs/DEVELOPMENT.md)。
-
-### 挂到 DSH profile
-
-```bash
-cd ~/.dsh/profiles/web
-pnpm add link:/absolute/path/to/notify-plugin
-```
-
-把包名加入该 profile 的 `dsh.profile.bundles`（保留原有条目，在末尾追加）：
-
-```json
-{
-  "dependencies": {
-    "@local/dsh-plugin-task-notify": "link:/absolute/path/to/notify-plugin"
-  },
-  "dsh": {
-    "profile": {
-      "bundles": [
-        "@local/dsh-plugin-task-notify"
-      ]
-    }
-  }
-}
-```
-
-插件包内的 `cordis.patch.yml` 会自动把 `task-notify` 条目插入 profile。重启 DSH Web 服务并刷新页面即可。
 
 ## 使用
 
@@ -215,4 +194,5 @@ pnpm add link:/absolute/path/to/notify-plugin
 
 - 本仓库代码采用 [MIT License](./LICENSE) 发布，Copyright (c) 2026 Quan Guanyu。
 - 点击回应动画素材来自 [PC2005-cloud/dsh-pet](https://github.com/PC2005-cloud/dsh-pet)，由本仓库脚本离线转成雪碧图；使用或再分发请遵循原仓库的许可。
+- 插件图标取自同一套待机素材，由 `scripts/build-icon.py` 生成。
 - 钉钉提示音来自 `assets/dingtalk.mp3`，仅用于本插件提示。

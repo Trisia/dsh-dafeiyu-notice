@@ -1,7 +1,7 @@
 // 客户端插件的打包配置：产出一个由 window.__ModuleLoader__.load 注册的懒工厂脚本。
 // 产物固定为 CommonJS 表单（factory(require) 里 return module.exports），与客户端模块
 // 系统的“先注册工厂、首次引用时再物化”的加载模型一致。
-const id = '@local/dsh-plugin-task-notify';
+const id = '@cliven/dsh-dafeiyu-notice';
 
 export default {
   entry: { client: 'src/client.ts' },

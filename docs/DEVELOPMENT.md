@@ -71,7 +71,8 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
   由 `src/clips/index.ts` 汇总后内联进客户端包。
 - 待机动画同样内联在 `src/sprite-sheet.ts`。
 
-这也是客户端包约 2.1 MB 的原因；换来的是不依赖宿主的资源路由，刷新即可用。
+点击回应动画的单帧是 216x228（每段 24 帧后约 420~470 KB），九段合计约 4 MB，
+再加上待机和提示音，客户端包约 5 MB；换来的是不依赖宿主的资源路由，刷新即可用。
 
 ## 开发
 
@@ -84,6 +85,34 @@ pnpm build        # 编译 index.ts、生成内嵌音频并构建 lib/client.js
 pnpm watch        # tsdown 监听构建，适合改 UI 时使用
 pnpm test         # 运行浏览器回归测试（见下）
 ```
+
+### 挂到 DSH profile
+
+需要可运行的 DSH Web 环境、Node.js 与 pnpm。先按上面的常用命令安装依赖并构建，再把本地目录挂到 profile：
+
+```bash
+cd ~/.dsh/profiles/web
+pnpm add link:/absolute/path/to/notify-plugin
+```
+
+把包名加入该 profile 的 `dsh.profile.bundles`（保留原有条目，在末尾追加）：
+
+```json
+{
+  "dependencies": {
+    "@cliven/dsh-dafeiyu-notice": "link:/absolute/path/to/notify-plugin"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@cliven/dsh-dafeiyu-notice"
+      ]
+    }
+  }
+}
+```
+
+插件包内的 `cordis.patch.yml` 会自动把 `task-notify` 条目插入 profile。重启 DSH Web 服务并刷新页面即可。
 
 ### 重新生成提示音
 
@@ -113,23 +142,11 @@ node scripts/embed-audio.mjs
 python3 scripts/build-click-sheets.py --src /path/to/webm-dir
 ```
 
-加上超分（推荐，质量明显更好，但需要更多依赖）：
-
-```bash
-python3 scripts/build-click-sheets.py \
-    --src /path/to/webm-dir \
-    --upscale --model /path/to/realesr-animevideov3.pth \
-    --cache .devcache/mask-cache
-```
-
 参数说明：
 
 | 参数 | 说明 |
 | --- | --- |
 | `--src` | 存放 webm 素材的目录 |
-| `--upscale` | 启用 Real-ESRGAN 超分再回缩到 108x114，边缘与发丝更干净 |
-| `--model` | 超分模型 `realesr-animevideov3.pth` 的路径（[下载](https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.2.5.0)） |
-| `--cache` | 超分与去残留结果的缓存目录，重复生成时跳过最慢的一步 |
 | `--only` | 只生成指定 id 的动画，例如 `--only scared wake` |
 | `--outdir` | 动画模块目录，默认 `src/clips`（一段一个文件） |
 
@@ -137,30 +154,23 @@ python3 scripts/build-click-sheets.py \
 
 - `ffmpeg`（需要 `libvpx-vp9` 解码透明通道）
 - Python 3 + `Pillow`、`numpy`、`scipy`
-- 超分额外需要：`torch`、`torchvision`、`basicsr`、`realesrgan`
 
 ```bash
 python3 -m venv .devcache/venv
-.devcache/venv/bin/pip install numpy scipy Pillow opencv-python-headless pyyaml
-.devcache/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
-.devcache/venv/bin/pip install --no-build-isolation realesrgan basicsr
-curl -L -o .devcache/models/realesr-animevideov3.pth \
-    https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-animevideov3.pth
+.devcache/venv/bin/pip install numpy scipy Pillow
 ```
 
 处理流程（每段动画）：
 
 1. 解码 2 秒、12fps、24 帧的 RGBA 帧，取 80ms/帧，与 `src/constants.ts` 的 `CLICK_FRAMES` / `CLICK_FRAME_MS` 对应；
-2. `--upscale` 时先按整段 alpha 并集裁出统一区域，用 Real-ESRGAN 的 animevideov3 x4 模型
-   对 RGB 推理，alpha 用三次插值放大后合成；只放 RGB 是因为素材的白底抠像会把暗边烘进 RGB，
-   连 alpha 一起放大等于把暗边加宽；
-3. 去色度抠像残留：素材自带的 alpha 已经把背景压到接近 0，真正要清的是两类残留 ——
-   背景里的雾状低 alpha 噪点（深色主题下会浮出一层灰雾），以及主体外圈 alpha 偏低、颜色又
-   贴近背景色的灰绿毛边。只清这两类，不能按颜色距离整体判定，否则白色星星、爆闪这类
-   “颜色接近背景但本身不透明”的特效会被一起删掉；
-4. 整段共用一个缩放比例（按每帧角色本体的 90 分位高度，让各段角色看起来一样大），
-   并让角色在 108x114 画布内居中，播放时不会漂移；
-5. 横向拼成 WebP（保留透明通道），写入 `src/clips/<id>.ts`，并重建 `src/clips/index.ts`。
+2. 交给 `scripts/build-alpha.py` 抠像（流程见下文「抠像与杂边」）；
+3. 整段共用一个缩放比例（按每帧角色本体的 90 分位高度，让各段角色看起来一样大），
+   并让角色在 216x228 画布内居中，播放时不会漂移；
+4. 横向拼成 WebP（保留透明通道），写入 `src/clips/<id>.ts`，并重建 `src/clips/index.ts`。
+
+单帧尺寸 216x228 由 `src/constants.ts` 的 `CLICK_WIDTH` / `CLICK_HEIGHT` 与脚本共同约定。
+画布尺寸一直是 108x114（由缩放比例决定），所以把单帧从 108x114 提到 216x228 后，
+在 2 倍缩放、高分屏和高 DPR 触屏上都是清晰的原生像素，不再由浏览器放大小图。
 
 每段动画输出一个独立文件，`git diff` 只会落在改动过的那几段上：
 
@@ -175,12 +185,33 @@ src/clips/
 加了新动作时，在 `CLIPS` 表里追加一行 `(id, 素材文件名, 起始秒, 展示名)`，然后只生成这一段：
 
 ```bash
-python3 scripts/build-click-sheets.py --src /path/to/webm-dir \
-    --upscale --model .devcache/models/realesr-animevideov3.pth \
-    --cache .devcache/mask-cache --only newid
+python3 scripts/build-click-sheets.py --src /path/to/webm-dir --only newid
 ```
 
 其余模块和索引都会保留，索引会按 `CLIPS` 顺序自动补上新段。生成文件已提交，正常开发不需要重跑。
+
+### 抠像与杂边
+
+素材是白底色度抠像的 VP9 alpha 视频，直接合成有三处问题：轮廓外压着一圈 alpha 0.1~0.5、
+颜色被白底冲淡的灰边，深色主题下会显出一道灰绿描边；轮廓内侧还有实色的细描边，
+清灰边时不能顺手削掉；爱心、星星、花边这类浅色对象的外圈还会泛出白色描边光。
+
+`scripts/build-alpha.py` 是点击动画的抠像实现：
+
+1. 用 `-c:v libvpx-vp9` 解码：ffmpeg 默认会选原生 vp9 解码器，它读不出 alpha 平面；
+2. 把二值轮廓外扩 4px 再回缩 1px，框出轮廓外压着的那圈灰带；只往外侧扩，
+   所以轮廓上 1 像素宽的实色描边（例如呆毛外沿）不会被误判成灰边；
+3. 灰带里逐像素估前景色：锚点取局部 alpha 极大值的平滑池（4px，配合远处 16px 的同量级配色），
+   发丝之间的抬头空隙不会被旁边的白底带偏；
+4. 灰带里按素材 alpha 一刀切（≥0.9 视为实色、其余透明），不输出半透明的中间值，
+   因此不会浮出描边；星光、爱心这些素材里本来就半透明的特效不在灰带里，保持原样；
+5. 灰带里浅色的薄边（爱心、星星、花边的外圈）直接清掉，深色主题下不会泛出白色描边光。
+
+调试时可以用 `scripts/key-preview.py` 把同一帧分别画在深色、浅色背景上对比：
+
+```bash
+python3 scripts/key-preview.py --src .devcache/webm/点击回应-元气挥手.webm --at 3.4 --box 200,40,470,345 --zoom 4
+```
 
 ### 测试
 
@@ -214,6 +245,7 @@ notify-plugin/
 ├── icon.svg
 ├── docs/
 │   ├── DEVELOPMENT.md        # 本文档
+│   ├── plugin-install.png    # README 安装截图
 │   └── task-notify-preview.png # README 头部截图
 ├── locale/
 │   ├── en.json
@@ -222,7 +254,9 @@ notify-plugin/
 │   └── dingtalk.mp3          # 提示音原始文件
 ├── scripts/
 │   ├── embed-audio.mjs       # mp3 → src/dingtalk-audio.ts
-│   └── build-click-sheets.py # webm → 超分/去杂边 → src/clips/<id>.ts
+│   ├── build-alpha.py        # 共用抠像：解码 + 去灰边 + 还原前景色
+│   ├── build-click-sheets.py # webm → 抠像 → 放大取景 → src/clips/<id>.ts
+│   └── key-preview.py        # 抠像效果的深/浅色背景对比图
 ├── src/
 │   ├── react.d.ts            # 最小 React 运行时类型声明
 │   ├── client.ts             # 注册槽位、状态仓库、队列与提示
@@ -246,6 +280,28 @@ notify-plugin/
     ├── client.js
     └── client.js.map
 ```
+
+## 发布
+
+发布由 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) 完成：推送 `v*` 标签后，工作流会校验标签与 `package.json` 的 `version` 一致，然后依次安装依赖、类型检查、构建、检查产物与仓库是否一致，带 provenance 发布到 npm，最后创建同名 GitHub Release（说明由 GitHub 按提交自动生成，版本号带 `-` 时标记为 prerelease）。
+
+发布步骤：
+
+1. 修改 `package.json` 的 `version`（例如 `1.1.0`）并提交。
+2. 打同名标签并推送：
+
+   ```bash
+   git tag v1.1.0
+   git push origin master --follow-tags
+   ```
+
+3. 在 GitHub Actions 里查看 `Publish` 工作流；成功后 Releases 里会出现 `v1.1.0`。失败时按日志修复后重跑（同一版本已发布时需要先升级版本）。
+
+仓库需要配置 `NPM_TOKEN` Secret：在 npm 生成 **Granular Access Token**（读写权限、允许发布并绕过 2FA），加到仓库的 Actions secrets 中。首次发布前令牌只能选 **All packages**，发布成功后可以收敛到本包；令牌有有效期，过期后 CI 会报 401，需要重新生成并更新 Secret。`@cliven` 作用域与 `publishConfig.access: public` 已在 `package.json` 里配置，发布包名为 `@cliven/dsh-dafeiyu-notice`，首次发布前确认 npm 账号有该作用域的发布权限。
+
+provenance 要求仓库公开；如果仓库改为私有，去掉工作流里的 `--provenance` 即可。
+
+依赖由 `pnpm-lock.yaml` 锁定；`pnpm-workspace.yaml` 关闭了自动安装 peer 依赖，因为这些 peer 由宿主提供，其中部分宿主包并未发布到 npm。
 
 ## 配置说明
 

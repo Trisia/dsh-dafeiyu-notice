@@ -1,6 +1,6 @@
 - insert:
     - id: task-notify
-      name: '@local/dsh-plugin-task-notify'
+      name: '@cliven/dsh-dafeiyu-notice'
       config:
         notifyOnTurnEnd: true
         notifyOnQuestion: true

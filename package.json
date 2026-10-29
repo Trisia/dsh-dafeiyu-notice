@@ -1,7 +1,6 @@
 {
-  "name": "@local/dsh-plugin-task-notify",
+  "name": "@cliven/dsh-dafeiyu-notice",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "description": "Task completion, question and approval reminders with a big-fish queue and a DingTalk-style sound",
   "exports": {
@@ -49,5 +48,24 @@
     "tsdown": "^0.23.2",
     "typescript": "^5.9.3"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Trisia/dsh-dafeiyu-notice.git"
+  },
+  "homepage": "https://github.com/Trisia/dsh-dafeiyu-notice#readme",
+  "bugs": {
+    "url": "https://github.com/Trisia/dsh-dafeiyu-notice/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "notification",
+    "task-notify",
+    "dingtalk"
+  ],
   "license": "MIT"
 }

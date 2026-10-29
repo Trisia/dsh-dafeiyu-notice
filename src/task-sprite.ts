@@ -3,7 +3,16 @@
  * 点击一次打开队首会话并播放一段随机的点击回应动画；队列点空后自行收起。
  */
 import React from 'react';
-import { CLICK_FRAMES, CLICK_FRAME_MS, PET_HEIGHT, PET_WIDTH, SPRITE_FRAME_MS, SPRITE_FRAMES } from './constants.js';
+import {
+  CLICK_FRAMES,
+  CLICK_FRAME_MS,
+  CLICK_HEIGHT,
+  CLICK_WIDTH,
+  PET_HEIGHT,
+  PET_WIDTH,
+  SPRITE_FRAME_MS,
+  SPRITE_FRAMES,
+} from './constants.js';
 import { CLICK_SHEETS } from './clips/index.js';
 import { clampAxis, clampScale, spriteSize, spriteTarget } from './session-view.js';
 import { readSpritePos, readSpriteScale, writeSpritePos, writeSpriteScale } from './storage.js';
@@ -328,8 +337,8 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss, clic
         'aria-hidden': true,
         style: {
           backgroundImage: `url(${clickSheet.sheet})`,
-          backgroundSize: `${PET_WIDTH * CLICK_FRAMES * scale}px ${PET_HEIGHT * scale}px`,
-          backgroundPosition: `${-(frame % CLICK_FRAMES) * PET_WIDTH * scale}px 0`,
+          backgroundSize: `${CLICK_WIDTH * CLICK_FRAMES * scale}px ${CLICK_HEIGHT * scale}px`,
+          backgroundPosition: `${-(frame % CLICK_FRAMES) * CLICK_WIDTH * scale}px 0`,
         },
       }),
     ),

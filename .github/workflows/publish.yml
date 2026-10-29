@@ -1,0 +1,82 @@
+name: Publish
+
+# 推送 v* 标签时构建、发布到 npm，并创建同名 GitHub Release；发布步骤见 docs/DEVELOPMENT.md 的“发布”一节。
+on:
+  push:
+    tags:
+      - 'v*'
+
+# 同一标签只允许一次发布，避免重跑时并发写 npm。
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  # 创建 GitHub Release 需要写权限。
+  contents: write
+  # npm provenance 通过 GitHub Actions 的 OIDC 令牌签名。
+  id-token: write
+
+jobs:
+  publish:
+    name: Build and publish to npm
+    # 只允许主仓库发布，避免 fork 上的同名标签误触发。
+    if: github.repository == 'Trisia/dsh-dafeiyu-notice'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Check tag matches package version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::标签 ${GITHUB_REF_NAME} 与 package.json 中的版本 v${version} 不一致"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      # 构建会重新生成 index.js 与内嵌音频；若与仓库不一致，说明产物或素材没有提交。
+      - name: Check build output is committed
+        run: git diff --exit-code -- index.js src/dingtalk-audio.ts
+
+      - name: Inspect package contents
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 发布成功后才创建 Release，避免 npm 失败时留下一个空发布。
+      # 说明由 GitHub 按提交自动生成；预发布版本（版本号带 -）标记为 prerelease。
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=(--repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes --verify-tag)
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${GITHUB_REF_NAME}" "${args[@]}"
