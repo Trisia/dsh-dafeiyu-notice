@@ -10,6 +10,13 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@cliven/dsh-dafeiyu-notice"><img src="https://img.shields.io/npm/v/@cliven/dsh-dafeiyu-notice?logo=npm" alt="npm 版本"></a>
+  <a href="https://github.com/Trisia/dsh-dafeiyu-notice/actions/workflows/ci.yml?query=branch%3Amaster"><img src="https://github.com/Trisia/dsh-dafeiyu-notice/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI 构建状态"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/Trisia/dsh-dafeiyu-notice" alt="MIT License"></a>
+  <a href="./package.json"><img src="https://img.shields.io/badge/dsh-%E2%89%A50.1.0-4B32C3" alt="DSH 版本要求：>= 0.1.0"></a>
+</p>
+
+<p align="center">
   <img src="./docs/task-notify-preview.png" alt="大肥鱼任务完成提醒截图：会话结束后右下角出现大肥鱼，气泡显示任务完成啦和会话标题" width="100%">
 </p>
 
