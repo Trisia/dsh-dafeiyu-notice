@@ -83,7 +83,6 @@ pnpm install      # 安装 tsdown 与 typescript
 pnpm typecheck    # tsc --noEmit 类型检查
 pnpm build        # 编译 index.ts、生成内嵌音频并构建 lib/client.js
 pnpm watch        # tsdown 监听构建，适合改 UI 时使用
-pnpm test         # 运行浏览器回归测试（见下）
 ```
 
 ### 挂到 DSH profile
@@ -213,23 +212,6 @@ python3 scripts/build-click-sheets.py --src /path/to/webm-dir --only newid
 python3 scripts/key-preview.py --src .devcache/webm/点击回应-元气挥手.webm --at 3.4 --box 200,40,470,345 --zoom 4
 ```
 
-### 测试
-
-```bash
-pnpm test
-```
-
-当前回归脚本位于开发工作区的 `../test-harness/browser-test.mjs`（不在本包内），使用真实 Chromium + React UMD 挂载客户端包，覆盖：
-
-- 大肥鱼出现、帧推进、拖动与位置恢复；
-- 拖右下角手柄缩放：尺寸与雪碧图背景同步变化、比例上限为 2、缩放不会误触点击，松手后比例与位置一起恢复；
-- 完成、等待回答、等待确认共用 FIFO 队列，气泡标题随队首切换；
-- 多会话点击切换、点击层透明度切换；
-- 最后一段动画结束后自动收起、`×` 清空队列；
-- 设置开关、音频元素与构建产物加载。
-
-脚本会在无头环境中 stub 掉 `<audio>` 的播放，避免自动播放策略干扰渲染断言；真实浏览器里仍使用内嵌 MP3，失败时退回合成音。脚本结束时会自动关闭浏览器；若手动中断，请自行清理残留进程。
-
 ## 目录结构
 
 ```text
@@ -280,6 +262,10 @@ notify-plugin/
     ├── client.js
     └── client.js.map
 ```
+
+## 持续集成
+
+推送任意分支都会触发 [`ci.yml`](../.github/workflows/ci.yml)：依次安装依赖、类型检查、构建，并检查 `index.js` 与 `src/dingtalk-audio.ts` 是否已随源码提交。打 `v*` 标签时该工作流不运行，由发布流程完成同样的校验。
 
 ## 发布
 

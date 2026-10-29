@@ -41,8 +41,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.host.json && node scripts/embed-audio.mjs && tsdown",
     "typecheck": "tsc --noEmit",
-    "watch": "tsdown --watch",
-    "test": "node ../test-harness/browser-test.mjs"
+    "watch": "tsdown --watch"
   },
   "devDependencies": {
     "tsdown": "^0.23.2",

@@ -1,0 +1,52 @@
+name: CI
+
+# 每次向分支推送时校验：依赖可安装、类型检查通过、构建成功，且构建产物已随源码提交。
+# 打 v* 标签时由 publish.yml 完成同样的校验并发布，这里跳过，避免同一提交跑两遍。
+on:
+  push:
+    branches:
+      - '**'
+    tags-ignore:
+      - 'v*'
+
+# 同一 ref 的旧运行让位给最新推送，只保留最新一次结果。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 校验只需要读取仓库内容。
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      # 构建会重新生成 index.js 与内嵌音频；若与仓库不一致，说明产物或素材没有提交。
+      - name: Check build output is committed
+        run: git diff --exit-code -- index.js src/dingtalk-audio.ts
