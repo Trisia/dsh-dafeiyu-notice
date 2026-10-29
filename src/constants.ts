@@ -32,6 +32,15 @@ export const STORAGE_KEY = 'dsh.taskNotify.settings.v1';
 /** 大肥鱼位置在 localStorage 中的存储键。 */
 export const POS_KEY = 'dsh.taskNotify.spritePos.v1';
 
+/** 大肥鱼缩放比例在 localStorage 中的存储键。 */
+export const SCALE_KEY = 'dsh.taskNotify.spriteScale.v1';
+
+/** 大肥鱼允许的最小缩放比例；1 表示基准尺寸。 */
+export const MIN_SPRITE_SCALE = 0.5;
+
+/** 大肥鱼允许的最大缩放比例；1 表示基准尺寸。 */
+export const MAX_SPRITE_SCALE = 2;
+
 /** “停止生成”按钮的无障碍文案特征，用于识别用户手动中止（覆盖中英文与其它语言的 Stop）。 */
 export const STOP_LABEL = /停止|stop/i;
 
@@ -41,8 +50,8 @@ export const ABORT_TTL = 8000;
 /** 连按 Esc 判定为停止的最大间隔，单位：毫秒。 */
 export const ESC_GAP = 1200;
 
-/** 大肥鱼占位宽度，单位：像素，用于把拖动范围限制在视口内。 */
+/** 大肥鱼基准宽度，单位：像素；实际宽度为基准宽度乘以缩放比例。 */
 export const PET_WIDTH = 108;
 
-/** 大肥鱼占位高度，单位：像素，用于把拖动范围限制在视口内。 */
+/** 大肥鱼基准高度，单位：像素；实际高度为基准高度乘以缩放比例。 */
 export const PET_HEIGHT = 114;

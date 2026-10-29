@@ -1,7 +1,8 @@
 /**
- * 偏好设置与大肥鱼位置的持久化，都存放在页面 localStorage。
+ * 偏好设置、大肥鱼位置与缩放大小的持久化，都存放在页面 localStorage。
  */
-import { POS_KEY, STORAGE_KEY } from './constants.js';
+import { POS_KEY, SCALE_KEY, STORAGE_KEY } from './constants.js';
+import { clampScale } from './session-view.js';
 
 /**
  * 读取偏好设置的持久化内容。
@@ -58,6 +59,32 @@ export function readSpritePos() {
 export function writeSpritePos(pos) {
   try {
     window.localStorage.setItem(POS_KEY, JSON.stringify(pos));
+  } catch (error) {
+    // 隐私模式等场景下无法持久化，忽略即可。
+  }
+}
+
+/**
+ * 读取已保存的大肥鱼缩放比例。
+ * @returns {number} 缩放比例，1 表示基准尺寸；从未缩放过时为 1。
+ */
+export function readSpriteScale() {
+  try {
+    const raw = window.localStorage.getItem(SCALE_KEY);
+    if (!raw) return 1;
+    return clampScale(Number(raw));
+  } catch (error) {
+    return 1;
+  }
+}
+
+/**
+ * 保存大肥鱼缩放比例，供下次打开页面时恢复。
+ * @param {number} scale - 缩放比例，1 表示基准尺寸。
+ */
+export function writeSpriteScale(scale) {
+  try {
+    window.localStorage.setItem(SCALE_KEY, String(clampScale(scale)));
   } catch (error) {
     // 隐私模式等场景下无法持久化，忽略即可。
   }

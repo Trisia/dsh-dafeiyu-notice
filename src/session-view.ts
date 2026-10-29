@@ -1,7 +1,7 @@
 /**
- * 会话列表快照的读取工具：单行元数据、待回答问题、大肥鱼坐标计算。
+ * 会话列表快照的读取工具：单行元数据、待回答问题、大肥鱼坐标与缩放计算。
  */
-import { PET_HEIGHT, PET_WIDTH } from './constants.js';
+import { MAX_SPRITE_SCALE, MIN_SPRITE_SCALE, PET_HEIGHT, PET_WIDTH } from './constants.js';
 
 /**
  * 读取单个会话在会话列表快照中的元数据。
@@ -76,9 +76,20 @@ export function spriteTarget(drag, point, size) {
 }
 
 /**
- * 大肥鱼元素的默认尺寸；元素尚未布局或环境不支持时使用。
+ * 把缩放比例限制在允许范围内；非法值退回基准比例。
+ * @param {number} value - 待限制的缩放比例，1 表示基准尺寸。
+ * @returns {number} 限制后的缩放比例。
+ */
+export function clampScale(value) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(Math.max(MIN_SPRITE_SCALE, value), MAX_SPRITE_SCALE);
+}
+
+/**
+ * 按缩放比例换算大肥鱼的实际尺寸。
+ * @param {number} scale - 缩放比例，1 表示基准尺寸。
  * @returns {{width: number, height: number}} 尺寸，单位：像素。
  */
-export function defaultSpriteSize() {
-  return { width: PET_WIDTH, height: PET_HEIGHT };
+export function spriteSize(scale) {
+  return { width: PET_WIDTH * scale, height: PET_HEIGHT * scale };
 }

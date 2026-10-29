@@ -17,6 +17,7 @@ export const EN = {
   'sprite.approval': 'Waiting for approval',
   'sprite.more': '{count} more',
   'sprite.dismiss': 'Clear notifications',
+  'sprite.resize': 'Drag to resize',
 };
 
 /** 界面文案：简体中文。 */
@@ -34,4 +35,5 @@ export const ZH = {
   'sprite.approval': '等你确认',
   'sprite.more': '还有 {count} 个',
   'sprite.dismiss': '清空提醒',
+  'sprite.resize': '拖动缩放',
 };

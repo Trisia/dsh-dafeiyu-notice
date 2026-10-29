@@ -12,6 +12,8 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
         └──新的 pendingInteraction──▶ 大肥鱼队列（问答 / 审批）
 
 大肥鱼点击 ──▶ uiWorkspace.openSession(sessionId) ──▶ 播放点击回应动画
+
+拖动 / 拖右下角缩放 ──▶ localStorage（位置 / 缩放比例）
 ```
 
 ### 会话状态观察
@@ -49,6 +51,14 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 - `TaskSprite`：待机层与点击层叠放，按 `data-phase` 只显示其中一层（`display` 切换，不做透明度过渡）；待机层一直循环，点击层播完最后一帧后回调并停住。相位变化时帧号在同一轮渲染内归零，所以点击当帧画出的就是点击动画第 0 帧，不会闪现点击前的待机画面。
 - `NotifySettingsRow`：设置页的开关行（子智能体完成 / 声音 / 提醒）。
 - 所有状态通过极简 `createStore` 暴露给宿主的 `useSyncExternalStore` 槽位。
+
+### 位置与缩放
+
+- `dsh.taskNotify.spritePos.v1` 保存显式坐标；从未拖动过时由 CSS 的 `right` / `bottom` 定位。
+- `dsh.taskNotify.spriteScale.v1` 保存缩放比例，范围 `0.5`～`2`，基准尺寸为 108×114。画布尺寸、雪碧图 `background-size` 与逐帧位移都乘以该比例，气泡位置相对画布尺寸计算，因此缩放后仍贴在精灵左上方。
+- 缩放手柄平时隐藏，鼠标悬停精灵或正在缩放时显示；`@media (hover: none)` 的触屏设备上常显，否则无法发现该操作。
+- 拖右下角手柄时以精灵左上角为锚点：指针横向位移 1px 对应宽度变化 1px，高度按基准比例联动；放大超出视口时收拢坐标，保证精灵和手柄始终在视口内。
+- 松手后才写入 localStorage；窗口尺寸变化时按当前缩放后的实际尺寸把坐标收回视口。
 
 注入面约定：槽位 `inject` 返回对象里的 `hooks` 是有保留含义的隔间，里面的每个键都会被当成订阅源（`getSnapshot` + `subscribe`）合成 `use<Name>` 钩子；动作函数（如 `activateNext`、`dismiss`）必须放在 `hooks` 外层，才会原样透传给组件。
 
@@ -181,6 +191,7 @@ pnpm test
 当前回归脚本位于开发工作区的 `../test-harness/browser-test.mjs`（不在本包内），使用真实 Chromium + React UMD 挂载客户端包，覆盖：
 
 - 大肥鱼出现、帧推进、拖动与位置恢复；
+- 拖右下角手柄缩放：尺寸与雪碧图背景同步变化、比例上限为 2、缩放不会误触点击，松手后比例与位置一起恢复；
 - 完成、等待回答、等待确认共用 FIFO 队列，气泡标题随队首切换；
 - 多会话点击切换、点击层透明度切换；
 - 最后一段动画结束后自动收起、`×` 清空队列；
@@ -225,7 +236,7 @@ notify-plugin/
 │   ├── locale.ts             # zh/en 字典
 │   ├── styles.ts             # 全部样式
 │   ├── styles-mount.ts       # 注入 <style>
-│   ├── session-view.ts       # 坐标约束等视图辅助
+│   ├── session-view.ts       # 坐标与缩放约束等视图辅助
 │   ├── sprite-sheet.ts       # 待机动画（内联）
 │   ├── clips/                # 点击回应动画，一段一个模块（生成）
 │   │   ├── index.ts          # 汇总索引（生成）

@@ -84,7 +84,7 @@
 
 ### 其它
 
-- **拖动与位置记忆**：大肥鱼可以拖到任意位置，位置保存在 `localStorage`，刷新页面后恢复；窗口尺寸变化时会自动收回视口内。
+- **拖动、缩放与记忆**：大肥鱼可以拖到任意位置；鼠标悬停时会显示右下角缩放手柄，拖动它调整大小（0.5～2 倍）。位置和大小都保存在 `localStorage`，刷新页面后恢复，窗口尺寸变化时会自动收回视口内。触屏设备没有悬停，手柄常显。
 - **主题适配**：颜色使用宿主的 `--dsw-alias-*` 主题令牌，浅色/深色主题都可融入。
 - **中英文文案**：跟随宿主语言，提供 `zh` / `en` 两套字典。
 - **键盘与读屏**：大肥鱼是有 `role="button"` 的焦点元素，支持 Enter / 空格；读屏软件合成的 click 也能触发切换。
@@ -139,6 +139,7 @@ pnpm add link:/absolute/path/to/notify-plugin
 | 点击大肥鱼 | 打开队首会话，播放一段随机点击回应动画 |
 | 点击气泡 `×` | 清空提醒队列并收起大肥鱼 |
 | 拖动大肥鱼 | 移动位置，松手后保存 |
+| 悬停精灵后拖动右下角手柄 | 调整大小（0.5～2 倍），松手后保存 |
 | 聚焦大肥鱼后按 Enter / 空格 | 等同于点击 |
 
 完成、等待回答、等待确认共用同一条队列，消费顺序就是入队顺序：
@@ -168,6 +169,7 @@ pnpm add link:/absolute/path/to/notify-plugin
 | --- | --- |
 | `dsh.taskNotify.settings.v1` | `{"enabled": true, "sound": true, "notifySubagent": false}` |
 | `dsh.taskNotify.spritePos.v1` | `{"left": number, "top": number}`，单位：像素 |
+| `dsh.taskNotify.spriteScale.v1` | 缩放比例，`0.5`～`2`，1 为基准大小 |
 
 需要重置时，在浏览器控制台删除对应键并刷新页面即可。
 
@@ -203,11 +205,11 @@ pnpm add link:/absolute/path/to/notify-plugin
 
 ### 刷新后队列消失
 
-提醒队列只保存在内存中，刷新页面会清空；这是为了避免恢复出已经过期的提醒。位置和设置会保留。
+提醒队列只保存在内存中，刷新页面会清空；这是为了避免恢复出已经过期的提醒。位置、大小和设置会保留。
 
 ### 大肥鱼跑到屏幕外
 
-拖动回来即可；如果坐标异常，删除 `localStorage` 里的 `dsh.taskNotify.spritePos.v1` 后刷新。
+拖动回来即可；如果坐标或大小异常，删除 `localStorage` 里的 `dsh.taskNotify.spritePos.v1` / `dsh.taskNotify.spriteScale.v1` 后刷新。
 
 ## 素材与许可
 

@@ -2,7 +2,7 @@
  * 大肥鱼与偏好设置行的样式。
  *
  * 只引用宿主主题令牌（--dsw-alias-*），保证浅色与深色主题下都能融入界面。
- * 大肥鱼尺寸随 {@link PET_WIDTH} / {@link SPRITE_FRAMES} 计算，与逐帧位移保持同一来源；
+ * 大肥鱼尺寸随 {@link PET_WIDTH} / {@link SPRITE_FRAMES} 与缩放比例计算，与逐帧位移保持同一来源；
  * 待机与点击回应两层叠放，按帧相位显示其中一层，不做透明度过渡。
  */
 import { PET_HEIGHT, PET_WIDTH, SPRITE_FRAMES } from './constants.js';
@@ -15,12 +15,17 @@ export const CSS = `
 .dshtn-pet[data-dragging="true"]{cursor:grabbing;transform:none;filter:drop-shadow(0 12px 22px rgba(0,0,0,.3));}
 .dshtn-pet-canvas:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:4px;border-radius:10px;}
 .dshtn-pet-canvas{position:relative;width:${PET_WIDTH}px;height:${PET_HEIGHT}px;}
-.dshtn-pet-img,.dshtn-pet-click{position:absolute;inset:0;width:${PET_WIDTH}px;height:${PET_HEIGHT}px;background-repeat:no-repeat;}
+.dshtn-pet-img,.dshtn-pet-click{position:absolute;inset:0;width:100%;height:100%;background-repeat:no-repeat;}
 .dshtn-pet-img{background-image:url(${SPRITE_SHEET});background-size:${PET_WIDTH * SPRITE_FRAMES}px ${PET_HEIGHT}px;}
 .dshtn-pet-click{display:none;}
 .dshtn-pet[data-phase="click"] .dshtn-pet-img{display:none;}
 .dshtn-pet[data-phase="click"] .dshtn-pet-click{display:block;}
-.dshtn-pet-bubble{position:absolute;right:calc(100% - 12px);bottom:96px;width:max-content;max-width:176px;padding:7px 26px 7px 10px;border-radius:10px;background:var(--dsw-alias-bg-overlay,#fff);border:.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.12));box-shadow:0 4px 14px rgba(0,0,0,.16);color:var(--dsw-alias-label-primary,#1f1f1f);font-size:12px;line-height:1.4;text-align:left;white-space:normal;}
+.dshtn-pet-resize{position:absolute;right:-4px;bottom:-4px;z-index:1;display:flex;align-items:flex-end;justify-content:flex-end;width:18px;height:18px;padding:3px;box-sizing:border-box;cursor:nwse-resize;touch-action:none;}
+.dshtn-pet-resize::after{content:"";width:9px;height:9px;border-right:2px solid var(--dsw-alias-brand-primary,#4d6bfe);border-bottom:2px solid var(--dsw-alias-brand-primary,#4d6bfe);border-bottom-right-radius:2px;opacity:0;transition:opacity .12s ease;}
+.dshtn-pet:hover .dshtn-pet-resize::after,.dshtn-pet[data-resizing="true"] .dshtn-pet-resize::after{opacity:.95;}
+@media (hover:none){.dshtn-pet-resize::after{opacity:.55;}}
+.dshtn-pet[data-resizing="true"]{cursor:nwse-resize;}
+.dshtn-pet-bubble{position:absolute;right:calc(100% - 12px);bottom:calc(100% - 18px);width:max-content;max-width:176px;padding:7px 26px 7px 10px;border-radius:10px;background:var(--dsw-alias-bg-overlay,#fff);border:.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.12));box-shadow:0 4px 14px rgba(0,0,0,.16);color:var(--dsw-alias-label-primary,#1f1f1f);font-size:12px;line-height:1.4;text-align:left;white-space:normal;}
 .dshtn-pet-bubble::after{content:"";position:absolute;right:-5px;bottom:14px;width:9px;height:9px;background:inherit;border-right:.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.12));border-top:.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.12));transform:rotate(45deg);}
 .dshtn-pet-title{display:block;}
 .dshtn-pet-who{display:block;margin-top:2px;font-size:11px;opacity:.62;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
