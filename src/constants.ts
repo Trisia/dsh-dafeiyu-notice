@@ -14,16 +14,19 @@ export const SETTLE_DELAY = 900;
 /** 等待宿主会话服务就绪时的重试间隔，单位：毫秒。 */
 export const RETRY_DELAY = 1000;
 
-/** 大肥鱼单帧停留时长，单位：毫秒。 */
-export const SPRITE_FRAME_MS = 80;
+/** 动画单帧宽度，单位：像素；待机与点击回应动画共用，与 scripts/sheet-spec.py 的 FRAME_WIDTH 一致。 */
+export const FRAME_WIDTH = 216;
 
-/** 雪碧图包含的帧数。 */
+/** 动画单帧高度，单位：像素；待机与点击回应动画共用，与 scripts/sheet-spec.py 的 FRAME_HEIGHT 一致。 */
+export const FRAME_HEIGHT = 228;
+
+/** 动画单帧停留时长，单位：毫秒；待机与点击回应动画共用，对应 12fps。 */
+export const FRAME_MS = 80;
+
+/** 待机动画包含的帧数；逐帧循环播放。 */
 export const SPRITE_FRAMES = 20;
 
-/** 点击回应动画单帧停留时长，单位：毫秒。 */
-export const CLICK_FRAME_MS = 80;
-
-/** 每段点击回应动画包含的帧数。 */
+/** 每段点击回应动画包含的帧数；播完即止。 */
 export const CLICK_FRAMES = 24;
 
 /** 偏好设置在 localStorage 中的存储键。 */
@@ -35,10 +38,13 @@ export const POS_KEY = 'dsh.taskNotify.spritePos.v1';
 /** 大肥鱼缩放比例在 localStorage 中的存储键。 */
 export const SCALE_KEY = 'dsh.taskNotify.spriteScale.v1';
 
-/** 大肥鱼允许的最小缩放比例；1 表示基准尺寸。 */
+/** 大肥鱼首次显示时的默认缩放比例；0.5 即动画规格的一半，之后由用户拖手柄调整。 */
+export const DEFAULT_SPRITE_SCALE = 0.5;
+
+/** 大肥鱼允许的最小缩放比例；1 表示与动画规格一致的基准尺寸。 */
 export const MIN_SPRITE_SCALE = 0.5;
 
-/** 大肥鱼允许的最大缩放比例；1 表示基准尺寸。 */
+/** 大肥鱼允许的最大缩放比例；1 表示与动画规格一致的基准尺寸。 */
 export const MAX_SPRITE_SCALE = 2;
 
 /** “停止生成”按钮的无障碍文案特征，用于识别用户手动中止（覆盖中英文与其它语言的 Stop）。 */
@@ -49,21 +55,3 @@ export const ABORT_TTL = 8000;
 
 /** 连按 Esc 判定为停止的最大间隔，单位：毫秒。 */
 export const ESC_GAP = 1200;
-
-/** 大肥鱼基准宽度，单位：像素；实际宽度为基准宽度乘以缩放比例。 */
-export const PET_WIDTH = 108;
-
-/** 大肥鱼基准高度，单位：像素；实际高度为基准高度乘以缩放比例。 */
-export const PET_HEIGHT = 114;
-
-/** 待机动画单帧宽度，单位：像素；与 scripts/build-idle-sheet.py 的 FRAME_WIDTH 一致。 */
-export const IDLE_WIDTH = 216;
-
-/** 待机动画单帧高度，单位：像素；与 scripts/build-idle-sheet.py 的 FRAME_HEIGHT 一致。 */
-export const IDLE_HEIGHT = 227;
-
-/** 点击回应动画单帧宽度，单位：像素；与 scripts/build-click-sheets.py 的 FRAME_WIDTH 一致。 */
-export const CLICK_WIDTH = 216;
-
-/** 点击回应动画单帧高度，单位：像素；与 scripts/build-click-sheets.py 的 FRAME_HEIGHT 一致。 */
-export const CLICK_HEIGHT = 228;

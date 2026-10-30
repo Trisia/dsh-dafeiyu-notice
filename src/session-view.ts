@@ -1,7 +1,13 @@
 /**
- * 会话列表快照的读取工具：单行元数据、待回答问题、大肥鱼坐标与缩放计算。
+ * 会话列表快照的读取工具：单行元数据、当前会话、待回答问题、大肥鱼坐标与缩放计算。
  */
-import { MAX_SPRITE_SCALE, MIN_SPRITE_SCALE, PET_HEIGHT, PET_WIDTH } from './constants.js';
+import {
+  DEFAULT_SPRITE_SCALE,
+  FRAME_HEIGHT,
+  FRAME_WIDTH,
+  MAX_SPRITE_SCALE,
+  MIN_SPRITE_SCALE,
+} from './constants.js';
 
 /**
  * 读取单个会话在会话列表快照中的元数据。
@@ -19,6 +25,23 @@ export function metaOf(list, id) {
       ? row.displayTitle
       : (typeof row.title === 'string' && row.title.length > 0 ? row.title : String(id)),
   };
+}
+
+/**
+ * 读取当前主视图正在显示的会话。
+ * 宿主侧边栏就是按同一个字段高亮当前会话：列表行的 `retainedBy.mainView` 计数大于 0 即为当前会话。
+ * @param {object} list - 会话列表快照。
+ * @returns {string|undefined} 当前会话 id；面板页或列表未就绪时为空。
+ */
+export function currentSessionId(list) {
+  const byId = list?.byId;
+  if (byId === undefined || byId === null) return undefined;
+  if (typeof byId !== 'object') return undefined;
+  for (const id of Object.keys(byId)) {
+    const row = byId[id];
+    if ((row?.retainedBy?.mainView ?? 0) > 0) return id;
+  }
+  return undefined;
 }
 
 /**
@@ -76,20 +99,20 @@ export function spriteTarget(drag, point, size) {
 }
 
 /**
- * 把缩放比例限制在允许范围内；非法值退回基准比例。
+ * 把缩放比例限制在允许范围内；非法值退回默认比例。
  * @param {number} value - 待限制的缩放比例，1 表示基准尺寸。
  * @returns {number} 限制后的缩放比例。
  */
 export function clampScale(value) {
-  if (!Number.isFinite(value)) return 1;
+  if (!Number.isFinite(value)) return DEFAULT_SPRITE_SCALE;
   return Math.min(Math.max(MIN_SPRITE_SCALE, value), MAX_SPRITE_SCALE);
 }
 
 /**
- * 按缩放比例换算大肥鱼的实际尺寸。
- * @param {number} scale - 缩放比例，1 表示基准尺寸。
+ * 按缩放比例换算大肥鱼的实际尺寸；基准尺寸就是动画单帧规格，播放时不额外缩小。
+ * @param {number} scale - 缩放比例，1 表示与动画规格一致的基准尺寸。
  * @returns {{width: number, height: number}} 尺寸，单位：像素。
  */
 export function spriteSize(scale) {
-  return { width: PET_WIDTH * scale, height: PET_HEIGHT * scale };
+  return { width: FRAME_WIDTH * scale, height: FRAME_HEIGHT * scale };
 }

@@ -6,9 +6,8 @@
 1. ffmpeg 解码出 12fps、24 帧的 RGBA 帧；
 2. 交给 `build-alpha.py` 抠像：边缘软边重估前景色、灰边按透明度一刀切，
    深色主题下不再浮出灰绿描边（详见该脚本的说明）；
-3. 整段共用一个缩放比例（按每帧角色本体的 90 分位高度，让各段角色看起来一样大），
-   并让角色在 FRAME_WIDTH x FRAME_HEIGHT 画布内居中，播放时不漂移；
-4. 横向拼成 WebP（保留透明通道），写入 `assets/web/<id>.webp`。
+3. 取景、拼图与编码统一交给 `sheet-spec.py`（与待机动画同一套规格与实现），单帧 216x228，
+   横向拼成 WebP 后写入 `assets/web/<id>.webp`。
 
 每段动画输出一个独立 WebP（默认 `assets/web/<id>.webp`），构建时由
 `scripts/embed-web-assets.mjs` 内联进客户端包；新增动作只需在 `CLIPS`
@@ -26,13 +25,8 @@
 
 import argparse
 import importlib.util
-import io
 import os
 import tempfile
-
-import numpy as np
-from PIL import Image
-from scipy import ndimage
 
 # 每段动画：(id, 素材文件名（不含扩展名）, 起始时间（秒）, 展示名)。
 CLIPS = [
@@ -47,96 +41,20 @@ CLIPS = [
     ('tumble', '原地左转奔跑', 2.0, '原地左转奔跑'),
 ]
 
-FPS = 12
+# 每段动画的帧数，与 src/constants.ts 的 CLICK_FRAMES 一致；其余规格见 sheet-spec.py。
 FRAMES = 24
-# 单帧尺寸，单位：像素；与 src/constants.ts 的 CLICK_WIDTH / CLICK_HEIGHT 保持一致。
-FRAME_WIDTH = 216
-FRAME_HEIGHT = 228
-WEBP_QUALITY = 90
-# 超分前在角色包围盒外留的像素，保证描边与特效不被裁掉。
-CROP_PAD = 12
-# 主体在画布内占用的最大比例：留出边缘柔和过渡的位置。
-BODY_FILL = 0.98
 
 
-def load_alpha():
-    """导入同目录下的 build-alpha.py，抠像逻辑与待机动画共用一份。
+def load_spec():
+    """导入同目录下的 sheet-spec.py，规格、取景与编码与待机动画共用一份。
 
     @returns: 已加载的模块对象。
     """
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'build-alpha.py')
-    spec = importlib.util.spec_from_file_location('build_alpha', path)
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sheet-spec.py')
+    spec = importlib.util.spec_from_file_location('sheet_spec', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def largest_region(mask):
-    """取最大连通区域（排除蝴蝶结、星星等分离小碎块）。
-
-    @param mask: 布尔掩码。
-    @returns: 只保留最大连通区域后的布尔掩码。
-    """
-    labels, count = ndimage.label(mask, structure=np.ones((3, 3)))
-    if count == 0:
-        return np.zeros_like(mask)
-    sizes = ndimage.sum(mask, labels, range(1, count + 1))
-    return labels == int(np.argmax(sizes)) + 1
-
-
-def build_sheet(source, start, workdir, key, alpha):
-    """把一段动画拼成单帧 FRAME_WIDTH x FRAME_HEIGHT 的横向雪碧图。
-
-    @param source: webm 文件路径。
-    @param start: 起始时间，单位：秒。
-    @param workdir: 存放中间 PNG 的临时目录。
-    @param key: 动画 id，用于中间文件命名。
-    @param alpha: build-alpha 模块，负责解码与抠像。
-    @returns: 横向 RGBA 雪碧图。
-    """
-    cleaned = alpha.clean_frames(alpha.decode_frames(source, start, FRAMES, FPS, workdir, key))
-
-    # 整段共用一个缩放比例，并让角色在画布内居中，播放时不会漂移。
-    # 取景按"每帧最大连通区域"（角色本体）的并集：星星、粒子等分离特效不参与，
-    # 否则特效一大，角色就被缩得忽大忽小。
-    solid = np.zeros(cleaned[..., 3].shape, dtype=bool)
-    for index, frame in enumerate(cleaned):
-        solid[index] = largest_region(frame[..., 3] > alpha.ALPHA_MIN)
-    ys, xs = np.where(solid.any(axis=0))
-    top, left = int(ys.min()), int(xs.min())
-    body_height = int(ys.max()) - top + 1
-    body_width = int(xs.max()) - left + 1
-    # 有跳跃/趴下的动作，并集高度会明显大于单帧体高；按 90 分位体高定缩放，
-    # 让各段角色看起来一样大，极端帧允许轻微贴边。
-    heights = []
-    for index in range(len(solid)):
-        rows = np.where(solid[index].any(axis=1))[0]
-        heights.append(int(rows.max()) - int(rows.min()) + 1)
-    typical_height = float(np.percentile(heights, 90))
-    scale = min(FRAME_HEIGHT * BODY_FILL / typical_height, FRAME_WIDTH * BODY_FILL / body_width)
-    # 素材角色高约 270 像素、画布 228 像素，缩小用 LANCZOS 保留发丝细节。
-    scaled_width = max(1, round(cleaned.shape[2] * scale))
-    scaled_height = max(1, round(cleaned.shape[1] * scale))
-    paste_x = round((FRAME_WIDTH - body_width * scale) / 2 - left * scale)
-    paste_y = round((FRAME_HEIGHT - body_height * scale) / 2 - top * scale)
-
-    sheet = Image.new('RGBA', (FRAME_WIDTH * FRAMES, FRAME_HEIGHT), (0, 0, 0, 0))
-    for index, frame in enumerate(cleaned):
-        tile = Image.fromarray(frame, 'RGBA').resize((scaled_width, scaled_height), Image.LANCZOS)
-        sheet.alpha_composite(tile, (index * FRAME_WIDTH + paste_x, paste_y))
-    return sheet
-
-
-def encode_webp(sheet):
-    """把雪碧图编码为保留透明通道的 WebP。
-
-    @param sheet: 横向 RGBA 雪碧图。
-    @returns: WebP 文件字节。
-    """
-    buffer = io.BytesIO()
-    sheet.save(buffer, format='WEBP', quality=WEBP_QUALITY, method=6,
-               alpha_quality=100, exact=False)
-    return buffer.getvalue()
 
 
 def main():
@@ -150,7 +68,8 @@ def main():
     parser.add_argument('--only', nargs='*', help='只生成指定 id 的动画，其余素材保持不变')
     args = parser.parse_args()
 
-    alpha = load_alpha()
+    spec = load_spec()
+    alpha = spec.load_alpha()
     os.makedirs(args.outdir, exist_ok=True)
 
     total = 0
@@ -161,13 +80,12 @@ def main():
             source = os.path.join(args.src, f'{file_name}.webm')
             if not os.path.exists(source):
                 raise SystemExit(f'缺少素材：{source}')
-            sheet = build_sheet(source, start, workdir, key, alpha)
-            encoded = encode_webp(sheet)
+            encoded, frames = spec.render(source, start, FRAMES, workdir, key, alpha)
             total += len(encoded)
             path = os.path.join(args.outdir, f'{key}.webp')
             with open(path, 'wb') as handle:
                 handle.write(encoded)
-            print(f'{key}: {FRAMES} 帧 {FRAME_WIDTH}x{FRAME_HEIGHT}，{len(encoded)} 字节 -> {path}',
+            print(f'{key}: {frames} 帧 {spec.FRAME_WIDTH}x{spec.FRAME_HEIGHT}，{len(encoded)} 字节 -> {path}',
                   flush=True)
 
     print(f'本次生成素材合计 {total} 字节')

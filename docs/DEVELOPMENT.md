@@ -1,6 +1,6 @@
 # 开发与实现说明
 
-本文档面向维护者，介绍 `dsh-dafeiyu-notice` 的实现方式、开发命令、素材生成和目录结构。功能与使用说明见 [README](../README.md)。
+本文档面向维护者，介绍 `dsh-dafeiyu-notice` 的实现方式、开发命令、素材生成和目录结构。功能概览见 [README](../README.md)，使用细节与配置见 [使用与配置](./USAGE.md)，排查问题见 [常见问题](./FAQ.md)。
 
 ## 实现说明
 
@@ -12,6 +12,8 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
         └──新的 pendingInteraction──▶ 大肥鱼队列（问答 / 审批）
 
 大肥鱼点击 ──▶ uiWorkspace.openSession(sessionId) ──▶ 播放点击回应动画
+
+会话列表点开被提醒的会话 ──▶ 该条移到队首 ──▶ 播放点击回应动画（已在该会话则直接弹出）
 
 拖动 / 拖右下角缩放 ──▶ localStorage（位置 / 缩放比例）
 ```
@@ -44,7 +46,12 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 }
 ```
 
-任务完成、等待回答、等待确认都调用同一个 `enqueueSprite` 进入这条 FIFO 队列。点击时先消费队首，再调用 `uiWorkspace.openSession`，因此切换和动画是同一个动作；队列里还有条目时气泡标题切到下一条的 `kind`。点击动画按 `CLICK_FRAMES` 帧、每帧 `CLICK_FRAME_MS` 逐帧播放，由组件在到达最后一帧时回调 `clickFinished`：队列还有条目就回到待机，队列为空就直接收起，不依赖任何固定时长。
+任务完成、等待回答、等待确认都调用同一个 `enqueueSprite` 进入这条 FIFO 队列。无论从哪个入口上屏，都先经 `playClick` 把这条放到队首、递增 `clickSeq`（触发一次点击回应动画），再由 `finishClick` 在动画播完时把队首弹出：队列还有条目就回到待机进入下一轮等待，队列为空就直接收起，不依赖任何固定时长。动画按 `CLICK_FRAMES` 帧、每帧 `CLICK_FRAME_MS` 逐帧播放，组件在到达最后一帧时回调 `clickFinished`。两个入口：
+
+- **点击大肥鱼**（`activateNext`）：取队首调用 `uiWorkspace.openSession` 再播放动画，打开的总是气泡上正在报的那条；动画播放期间的新点击直接忽略。
+- **在会话列表里手动点开被提醒的会话**（`activateSession`）：这条在队列中且不是队首时，把它移到队首并播放动画，动画播完弹出；点之前已经停在这个会话里时状态就在眼前，移到队首后立即弹出，只进入下一轮等待。已经上屏的队首不重复处理，避免同一条提醒结算两次。
+
+手动入口挂在 document 的捕获阶段点击上：会话行是 `[data-row-key="session:<id>"]`，行内按钮的点击不算打开会话。宿主在点击处理里同步切换会话，捕获阶段此时读到的仍是点击前的当前会话；`currentSessionId()` 按 `retainedBy.mainView` 取当前会话，与宿主侧边栏高亮同一来源。
 
 ### 渲染
 
@@ -55,12 +62,40 @@ uiSession.sessionStatus ──运行中 → 空闲──▶ 等待 900ms ──�
 ### 位置与缩放
 
 - `dsh.taskNotify.spritePos.v1` 保存显式坐标；从未拖动过时由 CSS 的 `right` / `bottom` 定位。
-- `dsh.taskNotify.spriteScale.v1` 保存缩放比例，范围 `0.5`～`2`，基准尺寸为 108×114。画布尺寸、雪碧图 `background-size` 与逐帧位移都乘以该比例，气泡位置相对画布尺寸计算，因此缩放后仍贴在精灵左上方。
+- `dsh.taskNotify.spriteScale.v1` 保存缩放比例，范围 `0.5`～`2`，基准尺寸为动画单帧规格 216×228；从未缩放过时按默认比例 `0.5` 显示。画布尺寸、雪碧图 `background-size` 与逐帧位移都乘以该比例，气泡位置相对画布尺寸计算，因此缩放后仍贴在精灵左上方。
 - 缩放手柄平时隐藏，鼠标悬停精灵或正在缩放时显示；`@media (hover: none)` 的触屏设备上常显，否则无法发现该操作。
 - 拖右下角手柄时以精灵左上角为锚点：指针横向位移 1px 对应宽度变化 1px，高度按基准比例联动；放大超出视口时收拢坐标，保证精灵和手柄始终在视口内。
 - 松手后才写入 localStorage；窗口尺寸变化时按当前缩放后的实际尺寸把坐标收回视口。
 
 注入面约定：槽位 `inject` 返回对象里的 `hooks` 是有保留含义的隔间，里面的每个键都会被当成订阅源（`getSnapshot` + `subscribe`）合成 `use<Name>` 钩子；动作函数（如 `activateNext`、`dismiss`）必须放在 `hooks` 外层，才会原样透传给组件。
+
+### 动画规格
+
+待机动画与点击回应动画共用同一套规格，由 `scripts/sheet-spec.py` 统一定义，
+`src/constants.ts`、`scripts/embed-web-assets.mjs` 与各生成脚本都对齐到它：
+
+| 项目 | 值 | 说明 |
+| --- | --- | --- |
+| 单帧尺寸 | `216 × 228` | 只定高度、不横向裁切：每帧按同一比例缩放后整张合成到画布，保留呆毛、尾鳍、星星等特效 |
+| 帧率 | `12fps`（80ms/帧） | `FRAME_MS = 80`，待机与点击共用 |
+| 帧数 | 待机 20 帧，点击 24 帧 | `SPRITE_FRAMES` / `CLICK_FRAMES` |
+| 雪碧图排布 | 横向拼接，第 n 帧位于 `x = n × 216` | 宽 = `216 × 帧数`（待机 4320、点击 5184） |
+| 画布与显示 | 画布 216×228，与单帧规格一致 | 首次显示默认 0.5 倍（即 108×114）；用户拖右下角手柄在 0.5～2 倍间手动缩放 |
+| 取景 | 角色本体 90 分位高度，`BODY_FILL = 0.98` | 按最大连通区域（排除尾鳍、星星等碎块）定比例，再按本体并集居中 |
+| 缩放算法 | LANCZOS | 素材角色高约 270px，缩小到 228px |
+| 编码 | WebP quality 90、alpha_quality 100、`exact=False` | 保留透明通道 |
+| 输入 | dsh-pet 的 `webm`，`libvpx-vp9` 解码 | 原生 vp9 解码器读不出 alpha 平面 |
+| 抠像 | `scripts/build-alpha.py` | 两种动画共用同一实现 |
+
+相关位置：
+
+- 前端常量：`FRAME_WIDTH` / `FRAME_HEIGHT` / `FRAME_MS`、`SPRITE_FRAMES`、`CLICK_FRAMES`（`src/constants.ts`）；
+- 生成脚本：`scripts/build-idle-sheet.py`、`scripts/build-click-sheets.py`，都通过 `sheet-spec.py`
+  的 `render()` 走同一条「解码 → 抠像 → 取景 → 编码」路径；
+- 内联：`scripts/embed-web-assets.mjs` 从 `assets/web/*.webp` 生成 `src/generated/sheets.ts`。
+
+改规格时三处要一起改：`sheet-spec.py` 的 `FRAME_WIDTH` / `FRAME_HEIGHT`、`src/constants.ts`
+的 `FRAME_WIDTH` / `FRAME_HEIGHT`、以及重新生成的 `assets/web/*.webp`。只改常量不改素材，画面会被拉伸或只显示一角。
 
 ### 资源内联
 
@@ -164,15 +199,13 @@ python3 -m venv .devcache/venv
 
 处理流程（每段动画）：
 
-1. 解码 2 秒、12fps、24 帧的 RGBA 帧，取 80ms/帧，与 `src/constants.ts` 的 `CLICK_FRAMES` / `CLICK_FRAME_MS` 对应；
+1. 解码 2 秒、12fps、24 帧的 RGBA 帧，取 80ms/帧，与 `src/constants.ts` 的 `CLICK_FRAMES` / `FRAME_MS` 对应；
 2. 交给 `scripts/build-alpha.py` 抠像（流程见下文「抠像与杂边」）；
-3. 整段共用一个缩放比例（按每帧角色本体的 90 分位高度，让各段角色看起来一样大），
-   并让角色在 216x228 画布内居中，播放时不会漂移；
-4. 横向拼成 WebP（保留透明通道），写入 `assets/web/<id>.webp`。
+3. 取景、拼图与编码统一走 `scripts/sheet-spec.py`（见「动画规格」），与待机动画同一套实现；
+4. 写入 `assets/web/<id>.webp`，构建时由 `embed-web-assets.mjs` 内联。
 
-单帧尺寸 216x228 由 `src/constants.ts` 的 `CLICK_WIDTH` / `CLICK_HEIGHT` 与脚本共同约定。
-画布尺寸一直是 108x114（由缩放比例决定），所以把单帧从 108x114 提到 216x228 后，
-在 2 倍缩放、高分屏和高 DPR 触屏上都是清晰的原生像素，不再由浏览器放大小图。
+单帧尺寸 216x228 由 `src/constants.ts` 的 `FRAME_WIDTH` / `FRAME_HEIGHT` 与脚本共同约定，
+首次显示按默认比例 0.5 绘制（即 108x114），避免初始过大。用户需要调整时，拖右下角手柄即可手动缩放（0.5～2 倍）。
 
 每段动画输出一个独立文件，`git diff` 只会落在改动过的那几段上：
 
@@ -228,22 +261,33 @@ python3 scripts/key-preview.py --src .devcache/webm/点击回应-元气挥手.we
 ### 重新生成待机动画
 
 待机（“等待”状态抱着双臂打瞌睡的那段）与点击回应动画走同一套规范：同样的边缘清理、
-同样按角色本体取景，单帧 216x227，20 帧，与 `src/constants.ts` 的 `IDLE_WIDTH` / `IDLE_HEIGHT`
+同样按角色本体取景，单帧 216x228，20 帧，与 `src/constants.ts` 的 `FRAME_WIDTH` / `FRAME_HEIGHT`
 及 `SPRITE_FRAMES` 对应。
 
 ```bash
 python3 scripts/build-idle-sheet.py
 ```
 
-脚本读取现有的 `assets/web/idle.webp`，把 20 帧拆出来，逐帧过 `build-alpha.py` 的
-`refine_fringe` / `clamp_white_edge`（灰带还原前景色 + 浅色薄边清掉），再按整段包围盒
-统一取景回 216x227 画布，最后压缩成 WebP 写回。输出尺寸与输入一致，重复运行只会
-把边缘再清理一遍；原始 webm 不在仓库里，所以以现有雪碧图作为输入。
+与点击回应动画完全相同：从 dsh-pet 的 `dsh-pet/assets/webm/用鲸鱼尾巴拍打地面.webm`
+解码带 alpha 的原始视频，交给 `build-alpha.py` 抠像（灰带重估前景色、浅色薄边清掉），
+再按角色本体的 90 分位高度统一取景、居中到大画布，压缩成 WebP。
+
+素材不在仓库里，先下载（或放到 `.devcache/webm/` 下同名文件）：
+
+```bash
+curl -L -o .devcache/webm/用鲸鱼尾巴拍打地面.webm \
+  https://raw.githubusercontent.com/PC2005-cloud/dsh-pet/main/dsh-pet/assets/webm/%E7%94%A8%E9%B2%B8%E9%B1%BC%E5%B0%BE%E5%B7%B4%E6%8B%8D%E6%89%93%E5%9C%B0%E9%9D%A2.webm
+python3 scripts/build-idle-sheet.py
+```
 
 | 参数 | 说明 |
 | --- | --- |
-| `--src` | 待机雪碧图 WebP 路径，默认 `assets/web/idle.webp` |
-| `--out` | 输出 WebP 路径，默认与 `--src` 相同 |
+| `--src` | 原始素材 webm，默认 `.devcache/webm/用鲸鱼尾巴拍打地面.webm` |
+| `--out` | 输出 WebP，默认 `assets/web/idle.webp` |
+| `--start` | 起始时间，单位：秒；默认 `0.83`，取自尾巴拍地的一个完整循环，首尾衔接最顺 |
+
+帧数与帧率是 20 帧、12fps，与 `src/constants.ts` 的 `SPRITE_FRAMES` 和 `FRAME_MS`（80ms）对应；
+单帧尺寸、取景与编码与点击回应动画完全一致，见「动画规格」。
 
 ## 目录结构
 
@@ -260,6 +304,8 @@ notify-plugin/
 ├── icon.svg
 ├── docs/
 │   ├── DEVELOPMENT.md        # 本文档
+│   ├── USAGE.md              # 使用细节与配置
+│   ├── FAQ.md                # 常见问题
 │   ├── plugin-install.png    # README 安装截图
 │   └── task-notify-preview.png # README 头部截图
 ├── locale/
@@ -273,9 +319,10 @@ notify-plugin/
 ├── scripts/
 │   ├── embed-audio.mjs       # mp3 → src/dingtalk-audio.ts
 │   ├── embed-web-assets.mjs  # assets/web/*.webp → src/generated/sheets.ts
+│   ├── sheet-spec.py         # 共用规格：单帧尺寸、帧率、取景、WebP 编码
 │   ├── build-alpha.py        # 共用抠像：解码 + 去灰边 + 还原前景色
-│   ├── build-idle-sheet.py   # 待机雪碧图：统一边缘清理与取景 → assets/web/idle.webp
-│   ├── build-click-sheets.py # webm → 抠像 → 放大取景 → assets/web/<id>.webp
+│   ├── build-idle-sheet.py   # 待机雪碧图：webm → 抠像 → 取景 → assets/web/idle.webp
+│   ├── build-click-sheets.py # 点击雪碧图：webm → 抠像 → 取景 → assets/web/<id>.webp
 │   └── key-preview.py        # 抠像效果的深/浅色背景对比图
 ├── src/
 │   ├── react.d.ts            # 最小 React 运行时类型声明

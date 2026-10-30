@@ -2,12 +2,12 @@
  * 大肥鱼与偏好设置行的样式。
  *
  * 只引用宿主主题令牌（--dsw-alias-*），保证浅色与深色主题下都能融入界面。
- * 画布尺寸一直取 {@link PET_WIDTH} / {@link PET_HEIGHT} 的基准值（由缩放比例决定）；
- * 待机层与点击层都由 2 倍密度的雪碧图组成，显示时按画布尺寸铺背景（素材等比缩小），
- * 缩放比例通过内联样式覆盖 background-size / background-position；
+ * 画布基准尺寸取动画单帧规格 {@link FRAME_WIDTH} / {@link FRAME_HEIGHT}，首次显示按默认比例 0.5 缩放；
+ * 待机层与点击层都按同一规格铺背景，缩放比例后续由用户拖手柄调整，通过内联样式覆盖
+ * background-size / background-position；
  * 待机与点击回应两层叠放，按帧相位显示其中一层，不做透明度过渡。
  */
-import { PET_HEIGHT, PET_WIDTH, SPRITE_FRAMES } from './constants.js';
+import { FRAME_HEIGHT, FRAME_WIDTH, SPRITE_FRAMES } from './constants.js';
 import { IDLE_SHEET } from './generated/sheets.js';
 
 export const CSS = `
@@ -16,9 +16,9 @@ export const CSS = `
 .dshtn-pet[data-placed="true"]{right:auto;bottom:auto;}
 .dshtn-pet[data-dragging="true"]{cursor:grabbing;transform:none;filter:drop-shadow(0 12px 22px rgba(0,0,0,.3));}
 .dshtn-pet-canvas:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:4px;border-radius:10px;}
-.dshtn-pet-canvas{position:relative;width:${PET_WIDTH}px;height:${PET_HEIGHT}px;}
+.dshtn-pet-canvas{position:relative;width:${FRAME_WIDTH}px;height:${FRAME_HEIGHT}px;}
 .dshtn-pet-img,.dshtn-pet-click{position:absolute;inset:0;width:100%;height:100%;background-repeat:no-repeat;}
-.dshtn-pet-img{background-image:url(${IDLE_SHEET});background-size:${PET_WIDTH * SPRITE_FRAMES}px ${PET_HEIGHT}px;}
+.dshtn-pet-img{background-image:url(${IDLE_SHEET});background-size:${FRAME_WIDTH * SPRITE_FRAMES}px ${FRAME_HEIGHT}px;}
 .dshtn-pet-click{display:none;}
 .dshtn-pet[data-phase="click"] .dshtn-pet-img{display:none;}
 .dshtn-pet[data-phase="click"] .dshtn-pet-click{display:block;}

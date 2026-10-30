@@ -5,10 +5,9 @@
 import React from 'react';
 import {
   CLICK_FRAMES,
-  CLICK_FRAME_MS,
-  PET_HEIGHT,
-  PET_WIDTH,
-  SPRITE_FRAME_MS,
+  FRAME_HEIGHT,
+  FRAME_MS,
+  FRAME_WIDTH,
   SPRITE_FRAMES,
 } from './constants.js';
 import { CLICK_SHEETS } from './clips/index.js';
@@ -83,7 +82,7 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss, clic
         if (!clicking) return (current + 1) % SPRITE_FRAMES;
         return current + 1 >= CLICK_FRAMES ? CLICK_FRAMES - 1 : current + 1;
       });
-    }, clicking ? CLICK_FRAME_MS : SPRITE_FRAME_MS);
+    }, FRAME_MS);
     return () => window.clearInterval(timer);
   }, [playing, clicking]);
 
@@ -326,10 +325,9 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss, clic
         className: 'dshtn-pet-img',
         'aria-hidden': true,
         style: {
-          // 雪碧图是 216x227 的 2 倍密度素材，画布只有 108x114：
-          // 背景尺寸必须按画布尺寸铺开，让素材等比缩小；按素材像素铺会只显示左上 1/4。
-          backgroundSize: `${PET_WIDTH * SPRITE_FRAMES * scale}px ${PET_HEIGHT * scale}px`,
-          backgroundPosition: `${-(frame % SPRITE_FRAMES) * PET_WIDTH * scale}px 0`,
+          // 单帧按动画规格 216×228 显示，整张雪碧图按帧宽横向铺开；初始为默认比例 0.5，之后由用户拖手柄调整。
+          backgroundSize: `${FRAME_WIDTH * SPRITE_FRAMES * scale}px ${FRAME_HEIGHT * scale}px`,
+          backgroundPosition: `${-(frame % SPRITE_FRAMES) * FRAME_WIDTH * scale}px 0`,
         },
       }),
       h('div', {
@@ -337,9 +335,9 @@ export function TaskSprite({ t, useTaskNotifySprite, activateNext, dismiss, clic
         'aria-hidden': true,
         style: {
           backgroundImage: `url(${clickSheet.sheet})`,
-          // 同上：24 帧的 216x228 素材按画布尺寸（108x114）铺开，整帧才能完整显示。
-          backgroundSize: `${PET_WIDTH * CLICK_FRAMES * scale}px ${PET_HEIGHT * scale}px`,
-          backgroundPosition: `${-(frame % CLICK_FRAMES) * PET_WIDTH * scale}px 0`,
+          // 与待机层相同的规格：单帧宽度即一帧的位移步长。
+          backgroundSize: `${FRAME_WIDTH * CLICK_FRAMES * scale}px ${FRAME_HEIGHT * scale}px`,
+          backgroundPosition: `${-(frame % CLICK_FRAMES) * FRAME_WIDTH * scale}px 0`,
         },
       }),
     ),

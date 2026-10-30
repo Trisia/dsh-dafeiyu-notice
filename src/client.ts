@@ -6,6 +6,7 @@ import { CLICK_SHEETS } from './clips/index.js';
 import { EN, ZH } from './locale.js';
 import { NotifySettingsRow } from './notify-settings-row.js';
 import { createSessionObserver } from './observer.js';
+import { currentSessionId } from './session-view.js';
 import { ring, resolveSoundUrl } from './sound.js';
 import { createStore } from './store.js';
 import { readSettings, writeSettings } from './storage.js';
@@ -136,9 +137,9 @@ export function apply(ctx) {
     spriteStore.set({
       ...previous,
       visible: true,
+      queue,
       title: titleOf(head.kind),
       kind: head.kind,
-      queue,
       sessionLabel: head.sessionLabel,
     });
     // 已经在显示时视为同一次提醒：不再重复响铃。
@@ -148,59 +149,103 @@ export function apply(ctx) {
   }
 
   /**
-   * 点击大肥鱼：打开队首会话、消除该条，并播放一段随机的点击回应动画。
+   * 计算气泡要展示的那条提醒对应的状态字段。
+   * @param {{sessionId: string, sessionLabel: string, kind: 'turnEnd'|'question'|'approval'}|undefined} item - 上屏的提醒；队列为空时为空。
+   * @param {'idle'|'click'} [phase] - 同时要切换到的帧相位，不切换时省略。
+   * @returns {object} 可合并进大肥鱼状态的字段。
+   */
+  function presented(item, phase) {
+    const fields = item === undefined
+      ? { title: '', kind: 'turnEnd', sessionLabel: '' }
+      : { title: titleOf(item.kind), kind: item.kind, sessionLabel: item.sessionLabel };
+    return phase === undefined ? fields : { ...fields, phase };
+  }
+
+  /**
+   * 把某条提醒移到队首并播放一段随机的点击回应动画，气泡同时切到这条提醒。
+   * 队列以新队首为准重建：该条仍在队首时等价于只播动画，不会打乱顺序。
+   * @param {object} current - 当前大肥鱼状态。
+   * @param {{sessionId: string, sessionLabel: string, kind: 'turnEnd'|'question'|'approval'}} item - 要处理的提醒。
    * @returns {void}
    */
-  function activateNext() {
-    const current = spriteStore.getSnapshot();
-    if (current.queue.length === 0) {
-      hideSprite();
-      return;
-    }
-    const [next, ...rest] = current.queue;
-    const head = rest[0];
+  function playClick(current, item) {
+    const queue = [item, ...current.queue.filter((entry) => entry.sessionId !== item.sessionId)];
     spriteStore.set({
       ...current,
       visible: true,
-      title: head ? titleOf(head.kind) : current.title,
-      kind: head ? head.kind : current.kind,
-      queue: rest,
-      phase: 'click',
-      clickIndex: pickClickIndex(current.clickIndex),
+      queue,
       clickSeq: current.clickSeq + 1,
-      sessionLabel: head ? head.sessionLabel : next.sessionLabel,
+      clickIndex: pickClickIndex(current.clickIndex),
+      ...presented(queue[0], 'click'),
     });
+  }
+
+  /**
+   * 是否正有点击回应动画在播放；播放期间新的点击不再排队。
+   * @returns {boolean} 正在播放时为 true。
+   */
+  function isClicking() {
+    return spriteStore.getSnapshot().phase === 'click';
+  }
+
+  /**
+   * 点击大肥鱼：打开队首会话并播放一段随机的点击回应动画，该条在动画播完后划掉。
+   * @returns {void}
+   */
+  function activateNext() {
+    if (isClicking()) return;
+    const current = spriteStore.getSnapshot();
+    const next = current.queue[0];
+    if (next === undefined) {
+      hideSprite();
+      return;
+    }
+    // 此时打开的正是队首，`playClick` 的重排对它原地不动；动画播完由 `finishClick` 划掉。
+    playClick(current, next);
     openSession(next.sessionId);
   }
 
   /**
-   * 当前这段点击回应动画播完最后一帧：队列还有会话就回到待机等下一次点击，
-   * 队列已空则直接收起，不再额外等待。
+   * 用户在会话列表里手动打开了被提醒的会话：把这条提醒移到队首并播放点击回应动画，
+   * 动画播完后由 `finishClick` 弹出；其余提醒保持原有顺序。
+   * 用户已经停在这个会话里时，状态就在眼前：移到队首后直接弹出，只进入下一轮等待。
+   * 已经上屏的队首不再处理，避免同一条提醒结算两次。
+   * @param {string} sessionId - 用户点开的会话。
+   * @param {boolean} wasCurrent - 点开之前用户是否已经停在这个会话里。
+   * @returns {void}
+   */
+  function activateSession(sessionId, wasCurrent) {
+    const current = spriteStore.getSnapshot();
+    if (current.phase === 'click' || !current.visible) return;
+    const index = current.queue.findIndex((item) => item.sessionId === sessionId);
+    if (index <= 0) return;
+    playClick(current, current.queue[index]);
+    if (wasCurrent) finishClick();
+  }
+
+  /**
+   * 点击回应动画播完最后一帧：把已经上屏的那条（队首）从队列中弹出，
+   * 还有提醒就回到待机进入下一轮等待，队列已空则收起。
+   * 每次动画只弹出一条，所以每条提醒无论从哪个入口上屏都恰好弹出一次。
    * @returns {void}
    */
   function finishClick() {
     const current = spriteStore.getSnapshot();
     if (current.phase !== 'click') return;
-    if (current.queue.length > 0) {
-      spriteStore.set({ ...current, phase: 'idle' });
+    const queue = current.queue.slice(1);
+    const head = queue[0];
+    if (head === undefined) {
+      hideSprite();
       return;
     }
-    hideSprite();
+    spriteStore.set({ ...current, queue, ...presented(head, 'idle') });
   }
 
   /** 清空队列并隐藏大肥鱼。 */
   function hideSprite() {
     const current = spriteStore.getSnapshot();
     if (!current.visible && current.queue.length === 0) return;
-    spriteStore.set({
-      ...current,
-      visible: false,
-      title: '',
-      kind: 'turnEnd',
-      sessionLabel: '',
-      queue: [],
-      phase: 'idle',
-    });
+    spriteStore.set({ ...current, visible: false, queue: [], ...presented(undefined, 'idle') });
   }
 
   /**
@@ -222,6 +267,49 @@ export function apply(ctx) {
     shouldNotifyTurnEnd: () => settingsStore.getSnapshot().notifySubagent,
   });
   ctx.effect(() => () => observer.dispose(), 'task-notify: session observer');
+
+  // ── 用户在会话列表里手动打开被提醒的会话 ────────────────────────────
+  // 点击会话行时宿主会同步把主视图切到该会话；这里在捕获阶段读点击之前的主视图，
+  // 于是“点之前就在这个会话里”与“切到别的会话”可以区分开。
+  /** 会话列表里一行会话的 `data-row-key`，形如 `session:<id>`。 */
+  const SESSION_ROW = '[data-row-key^="session:"]';
+
+  /**
+   * 读取会话列表快照；服务尚未就绪时为空。
+   * @returns {object|undefined} 会话列表快照。
+   */
+  function sessionList() {
+    const sessions = ctx.get('sessions');
+    return sessions?.list?.getSnapshot?.();
+  }
+
+  /**
+   * 当前主视图正在显示的会话；不是会话页（例如设置页）时为空。
+   * @returns {string|undefined} 会话 id。
+   */
+  function currentSession() {
+    return currentSessionId(sessionList());
+  }
+
+  /**
+   * 会话列表里点到某一行会话（点按钮只算操作按钮自身，不算打开会话）。
+   * 点击在宿主切换会话之前同步派发，这里读到的仍是点击前的当前会话。
+   * @param {MouseEvent} event - 冒泡到 document 的点击事件。
+   * @returns {void}
+   */
+  function onDocumentClick(event) {
+    const target = event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    const row = target.closest(SESSION_ROW);
+    if (row === null) return;
+    if (target.closest('button') !== null) return;
+    const sessionId = row.dataset.rowKey.slice('session:'.length);
+    // 面板页（设置等）没有当前会话，这时按“切到了别的会话”处理。
+    activateSession(sessionId, currentSession() === sessionId);
+  }
+
+  window.addEventListener('click', onDocumentClick, true);
+  ctx.effect(() => () => window.removeEventListener('click', onDocumentClick, true), 'task-notify: session row watcher');
 
   // ── 浮层：右下角大肥鱼 ──────────────────────────────────────────────
   ctx.slots.inject('shell.overlay', () =>

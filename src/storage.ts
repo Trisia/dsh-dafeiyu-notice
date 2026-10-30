@@ -1,7 +1,7 @@
 /**
  * 偏好设置、大肥鱼位置与缩放大小的持久化，都存放在页面 localStorage。
  */
-import { POS_KEY, SCALE_KEY, STORAGE_KEY } from './constants.js';
+import { DEFAULT_SPRITE_SCALE, POS_KEY, SCALE_KEY, STORAGE_KEY } from './constants.js';
 import { clampScale } from './session-view.js';
 
 /**
@@ -66,15 +66,15 @@ export function writeSpritePos(pos) {
 
 /**
  * 读取已保存的大肥鱼缩放比例。
- * @returns {number} 缩放比例，1 表示基准尺寸；从未缩放过时为 1。
+ * @returns {number} 缩放比例，1 表示基准尺寸；从未缩放过时返回默认比例 0.5。
  */
 export function readSpriteScale() {
   try {
     const raw = window.localStorage.getItem(SCALE_KEY);
-    if (!raw) return 1;
+    if (!raw) return DEFAULT_SPRITE_SCALE;
     return clampScale(Number(raw));
   } catch (error) {
-    return 1;
+    return DEFAULT_SPRITE_SCALE;
   }
 }
 
