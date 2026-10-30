@@ -1,6 +1,6 @@
 {
   "name": "@cliven/dsh-dafeiyu-notice",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Task completion, question and approval reminders: a Dafeiyu big-fish notice with a DingTalk-style sound",
   "engines": {
