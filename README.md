@@ -31,17 +31,19 @@
 
 ## 安装
 
-在 DSH 的 **设置 → 插件 → 添加插件** 中填入：
+在 DSH 的 **设置 → 插件 → 添加插件** 中填入插件名与版本号：
 
 ```text
-@cliven/dsh-dafeiyu-notice
+@cliven/dsh-dafeiyu-notice@1.0.1
 ```
 
 也可以用命令行安装：
 
 ```bash
-dsh plugin add @cliven/dsh-dafeiyu-notice
+dsh plugin add @cliven/dsh-dafeiyu-notice@1.0.1
 ```
+
+版本号固定为当前发布版本（现在是 `1.0.1`），升级时替换 `@` 后面的数字即可。
 
 安装后重启 DSH Web 服务并刷新页面即可。安装界面示意：
 
